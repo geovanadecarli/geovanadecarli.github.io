@@ -83,6 +83,7 @@
       var r = await sb.rpc('aceitar_privacidade');
       if (r.error) { alert(msgErro(r.error)); this.disabled = false; return; }
       aluno.aceite_privacidade = new Date().toISOString();
+      try { await carregar(); } catch (e) { alert(msgErro(e)); }
       rota();
     };
   }
