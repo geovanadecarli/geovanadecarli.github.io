@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!-- ================================================================
+     PRÉVIA DO LINK (WhatsApp, Instagram)
+     Depois de publicar, troque o endereço pelo endereço real do site.
+     ================================================================ -->
+<title>Mini telas · Geovana De Carli</title>
+<meta name="description" content="60 mini telas únicas de 10x10 cm, pintadas à mão por Geovana De Carli. Envio para todo o Brasil.">
+<meta property="og:title" content="Mini telas · Geovana De Carli">
+<meta property="og:description" content="60 mini telas únicas de 10x10 cm. Envio para todo o Brasil.">
+<meta property="og:image" content="https://geovanadecarli.github.io/mini-telas/fotos/compartilhar.jpg">
+<meta property="og:url" content="https://geovanadecarli.github.io/mini-telas/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#F3E6DA">
+
+<script>
+/* ================================================================
+   ✏️  TUDO QUE VOCÊ PODE TROCAR ESTÁ AQUI EMBAIXO
+   - Troque só o texto entre aspas "assim" e os números.
+   - Não apague aspas, vírgulas, chaves { } nem colchetes [ ].
+   - Para ADICIONAR uma tela nova: copie um bloco { ... }, cole no fim
+     da lista "telas" e troque número, nome, preço e fotos.
+   - As vagas que faltam até 60 aparecem sozinhas como "em breve".
+   - status: "disponivel", "reservada" ou "vendida"
+   ================================================================ */
+const LOJA = {
+  nome: "Mini telas",
+  assinatura: "por Geovana De Carli",
+  total: 60,
+  tamanho: "10x10 cm",
+  whatsapp: "5541992645317",
+  envio: "Envio para todo o Brasil · frete calculado no WhatsApp",
+  voltarPara: "../",   // botão "voltar" leva para o site de links
+
+  telas: [
+    {
+      numero: "01", nome: "Flor rosa", preco: "R$ 150", status: "disponivel",
+      fotos: ["fotos/flor-rosa.jpg"],
+      descricao: "Flor rosa em relevo de espátula, com glitter e confetes de coração dourados sobre fundo verde."
+    },
+    {
+      numero: "02", nome: "Conchas", preco: "R$ 150", status: "disponivel",
+      fotos: ["fotos/conchas.jpg"],
+      descricao: "Mar azul em textura, com conchas e pérolas aplicadas e brilho dourado."
+    },
+    {
+      numero: "03 a 05", ocupa: 3, nome: "Trio Entardecer", preco: "R$ 150 cada", status: "disponivel",
+      fotos: ["fotos/trio-entardecer.jpg", "fotos/trio-entardecer-2.jpg", "fotos/trio-entardecer-3.jpg"],
+      descricao: "Três mini telas que formam um só pôr do sol, com glitter e estrelinhas. Você pode levar uma, duas ou as três.",
+      mensagem: "Oi Geovana! Vim pela loja Mini telas e quero o Trio Entardecer (nº 03 a 05, R$ 150 cada). Ainda está disponível?"
+    },
+    {
+      numero: "06", nome: "Paris", preco: "R$ 500", status: "disponivel",
+      fotos: ["fotos/paris.jpg"],
+      descricao: "Torre Eiffel em espátula, com céu claro e folhagem dourada. Um pedacinho da jornada até Paris 2027."
+    },
+    {
+      numero: "07", nome: "Pisa", preco: "R$ 150", status: "disponivel",
+      fotos: ["fotos/pisa.jpg"],
+      descricao: "Torre de Pisa sob céu azul, com nuvens laranja e estrelinhas."
+    },
+    {
+      numero: "08", nome: "Luffy", preco: "R$ 250", status: "disponivel",
+      fotos: ["fotos/luffy.jpg"],
+      descricao: "Luffy sorrindo sob o chapéu de palha, em relevo de espátula, com glitter e confetes de estrela e coração."
+    }
+  ],
+
+  // Mensagem padrão do botão Comprar. {numero}, {nome} e {preco} são trocados sozinhos.
+  mensagemComprar: "Oi Geovana! Vim pela loja Mini telas e quero comprar a mini tela nº {numero}, {nome} ({preco}). Ainda está disponível?",
+  mensagemVendida: "Oi Geovana! Vi que a mini tela {nome} já foi vendida. Você faria uma parecida para mim?",
+  mensagemAvise: "Oi Geovana! Quero ser avisada quando sair uma nova mini tela.",
+
+  // Contagem de cliques (GoatCounter): o mesmo código do site de links
+  goatcounter: ""
+};
+/* ================== FIM DA PARTE EDITÁVEL ================== */
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Cormorant+Garamond:wght@500&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --creme:#F3E6DA; --papel:#FFFBF7; --tinta:#3A2A24; --suave:#7E6458;
+  --rosa:#B24A6E; --ouro:#E9C46A; --ouro-escuro:#6B4E0E; --linha:#E6D3C4;
+  --noite:#2A1640; --noite-2:#3A2257; --lilas:#CDB6E8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background-color:var(--creme);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .36 0 0 0 0 .24 0 0 0 0 .18 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  color:var(--tinta); font:400 16px/1.5 Jost,system-ui,sans-serif; min-height:100vh;
+}
+main{max-width:560px;margin:0 auto;padding:18px 16px 32px}
+a{color:inherit;text-decoration:none;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
+.toque{transition:transform .16s ease-out}
+.toque:active{transform:scale(.97)}
+:focus-visible{outline:2px solid #5F87AE;outline-offset:3px}
+
+.voltar{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--suave);padding:8px 0}
+.topo{text-align:center;margin-top:10px}
+h1{font:500 42px/1 'Cormorant Garamond',Georgia,serif}
+h1 span{color:var(--ouro-escuro)}
+.assin{font:500 26px/1.1 Caveat,cursive;color:var(--rosa);margin-top:2px}
+.intro{font-size:15px;color:var(--suave);margin:10px auto 0;max-width:320px}
+
+.progresso{margin:22px auto 0;max-width:340px}
+.progresso p{font-size:14px;display:flex;justify-content:space-between}
+.progresso b{font-weight:500}
+.barra{height:8px;border-radius:8px;background:var(--linha);margin-top:6px;overflow:hidden}
+.barra i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,var(--rosa),var(--ouro))}
+.envio{font-size:13px;color:var(--suave);text-align:center;margin-top:14px}
+
+.grade{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:22px}
+.tela{border:0;background:none;text-align:left;cursor:pointer;padding:0}
+.quadro{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--papel);
+  box-shadow:0 3px 10px rgba(58,42,36,.12)}
+.quadro img{width:100%;height:100%;object-fit:cover;display:block}
+.tela .nome{display:block;font-size:13px;font-weight:500;margin-top:6px;line-height:1.2}
+.tela .preco{display:block;font-size:12px;color:var(--suave)}
+.selo{position:absolute;left:6px;top:6px;font-size:11px;font-weight:500;padding:2px 7px;border-radius:20px;background:#fff;color:var(--rosa)}
+.selo.vendida{left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:4px;background:var(--rosa);color:#fff;font-size:11px;letter-spacing:.08em;padding:4px 9px 4px 6px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.selo.vendida svg{width:14px;height:14px;flex:none}
+.vendida-img img{filter:brightness(.55) saturate(.85)}
+.semfoto{display:grid;place-items:center;height:100%;background:var(--noite);color:var(--ouro);font-size:12px;text-align:center;padding:8px}
+
+.breve .quadro{background:var(--noite);display:grid;place-items:center;box-shadow:none}
+.breve .quadro::after{content:"";position:absolute;inset:0;border-radius:12px;border:1px solid var(--noite-2)}
+.estrela{color:var(--ouro);font-size:20px;line-height:1;opacity:.85}
+.breve .num{position:absolute;left:8px;bottom:6px;font-size:11px;color:var(--lilas)}
+.breve .nome{color:var(--suave);font-weight:400}
+@media (prefers-reduced-motion:no-preference){
+  .estrela{animation:brilha 3.2s ease-in-out infinite}
+  @keyframes brilha{0%,100%{opacity:.45;transform:scale(.9)}50%{opacity:1;transform:scale(1.08)}}
+}
+
+.avise{display:block;margin:30px auto 0;max-width:340px;text-align:center;background:var(--noite);color:#F3E9FF;
+  padding:16px 18px;border-radius:18px}
+.avise small{display:block;color:var(--lilas);font-size:13px}
+footer{text-align:center;font-size:12px;color:var(--suave);margin-top:24px}
+
+/* detalhe da tela */
+dialog{border:0;padding:0;width:100%;max-width:480px;margin:auto auto 0;border-radius:22px 22px 0 0;
+  background:var(--papel);color:var(--tinta);max-height:92vh;overflow:auto}
+@media (min-width:600px){dialog{margin:auto;border-radius:22px}}
+dialog::backdrop{background:rgba(30,20,16,.6)}
+.fechar{position:absolute;right:12px;top:12px;width:40px;height:40px;border-radius:50%;border:0;
+  background:rgba(255,255,255,.9);font-size:22px;line-height:1;cursor:pointer;z-index:2}
+.carrossel{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.carrossel::-webkit-scrollbar{display:none}
+.carrossel img{flex:0 0 100%;width:100%;aspect-ratio:1;object-fit:cover;scroll-snap-align:center}
+.pontos{display:flex;justify-content:center;gap:6px;margin-top:10px}
+.pontos i{width:6px;height:6px;border-radius:50%;background:var(--linha)}
+.pontos i.on{background:var(--rosa)}
+.info{padding:16px 20px 24px}
+.info .n{font-size:13px;color:var(--suave)}
+.info h2{font:500 30px/1.1 'Cormorant Garamond',Georgia,serif;margin-top:2px}
+.info .valor{font-size:22px;font-weight:500;color:var(--rosa);margin-top:6px}
+.info .medidas{font-size:14px;color:var(--suave)}
+.info .desc{font-size:15px;margin-top:12px}
+.comprar{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:18px;background:var(--rosa);color:#fff;
+  font-size:18px;font-weight:500;padding:17px;border-radius:46px 38px 50px 34px / 40px 48px 36px 44px;
+  box-shadow:0 8px 22px rgba(178,74,110,.28)}
+.comprar svg{width:22px;height:22px}
+.info .envio{margin-top:10px}
+.breve-info{background:var(--noite);color:#F3E9FF;text-align:center;padding:40px 22px 28px}
+.breve-info .estrela{font-size:44px;display:block;margin-bottom:12px}
+.breve-info h2{font:500 30px/1.1 'Cormorant Garamond',Georgia,serif}
+.breve-info p{color:var(--lilas);font-size:15px;margin-top:8px}
+.breve-info .comprar{background:var(--ouro);color:#3D2C05;box-shadow:none}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<dialog id="detalhe" aria-label="Detalhes da mini tela"></dialog>
+
+<script>
+(function(){
+  var L = LOJA, app = document.getElementById('app'), dlg = document.getElementById('detalhe');
+  var zapIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>';
+
+  function esc(t){return String(t||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function zap(msg){return 'https://wa.me/'+L.whatsapp+'?text='+encodeURIComponent(msg)}
+  function preencher(modelo,t){return modelo.replace('{numero}',t.numero).replace('{nome}',t.nome).replace('{preco}',t.preco)}
+  function contar(nome){ if (L.goatcounter && window.goatcounter && window.goatcounter.count) window.goatcounter.count({path:'clique-'+nome, title:nome, event:true}); }
+
+  // quantas vagas já foram usadas
+  var usadas = 0;
+  L.telas.forEach(function(t){ usadas += (t.ocupa || 1); });
+  var pct = Math.min(100, Math.round(usadas / L.total * 100));
+
+  var h = '';
+  h += '<a class="voltar" href="'+esc(L.voltarPara)+'">← Geovana De Carli</a>';
+  h += '<header class="topo"><h1>Mini <span>telas</span></h1>'+
+       '<p class="assin">'+esc(L.assinatura)+'</p>'+
+       '<p class="intro">'+L.total+' mini telas de '+esc(L.tamanho)+', cada uma única. Toque numa tela para ver de perto.</p></header>';
+  h += '<div class="progresso"><p><span><b>'+usadas+' de '+L.total+'</b> já nasceram</span><span>'+(L.total-usadas)+' em breve</span></p>'+
+       '<div class="barra"><i style="width:'+pct+'%"></i></div></div>';
+  h += '<p class="envio">'+esc(L.envio)+'</p>';
+
+  h += '<div class="grade">';
+  L.telas.forEach(function(t,i){
+    var vendida = t.status === 'vendida', reservada = t.status === 'reservada';
+    var selo = vendida ? '<span class="selo vendida"><svg viewBox="0 0 24 24" fill="none" stroke="#F2CF7A" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l2.9 6.2 6.6.8-4.9 4.6 1.3 6.6L12 17.4l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>VENDIDA</span>' : reservada ? '<span class="selo">reservada</span>' : '';
+    var img = t.fotos.length
+      ? '<img src="'+esc(t.fotos[0])+'" alt="'+esc(t.nome)+'" loading="'+(i<6?'eager':'lazy')+'" decoding="async" width="240" height="240">'
+      : '<div class="semfoto">foto<br>em breve</div>';
+    h += '<button class="tela toque" type="button" data-i="'+i+'">'+
+         '<div class="quadro'+(vendida?' vendida-img':'')+'">'+img+selo+'</div>'+
+         '<span class="nome">'+esc(t.nome)+'</span><span class="preco">'+(vendida?'vendida':esc(t.preco))+'</span></button>';
+  });
+  for (var n = usadas + 1; n <= L.total; n++) {
+    var num = (n < 10 ? '0' : '') + n;
+    h += '<button class="tela breve toque" type="button" data-breve="'+num+'">'+
+         '<div class="quadro"><span class="estrela" style="animation-delay:'+((n*0.37)%3).toFixed(2)+'s" aria-hidden="true">✦</span>'+
+         '<span class="num">nº '+num+'</span></div><span class="nome">em breve</span></button>';
+  }
+  h += '</div>';
+
+  h += '<a class="avise toque" href="'+zap(L.mensagemAvise)+'" target="_blank" rel="noopener" data-clique="avise">'+
+       'Quero ser avisada das próximas<small>Te aviso no WhatsApp quando nascer uma nova</small></a>';
+  h += '<footer>© '+new Date().getFullYear()+' Geovana De Carli · feito à mão em Curitiba</footer>';
+  app.innerHTML = h;
+
+  // abrir detalhe
+  function abrir(html){
+    dlg.innerHTML = '<button class="fechar" type="button" aria-label="Fechar">×</button>' + html;
+    dlg.showModal();
+    var car = dlg.querySelector('.carrossel'), pts = dlg.querySelectorAll('.pontos i');
+    if (car && pts.length) car.addEventListener('scroll', function(){
+      var k = Math.round(car.scrollLeft / car.clientWidth);
+      pts.forEach(function(p,j){ p.classList.toggle('on', j === k); });
+    }, {passive:true});
+  }
+
+  app.addEventListener('click', function(e){
+    var b = e.target.closest('.tela');
+    if (b && b.dataset.i !== undefined) {
+      var t = L.telas[b.dataset.i], vendida = t.status === 'vendida';
+      var msg = vendida ? preencher(L.mensagemVendida,t) : (t.mensagem || preencher(L.mensagemComprar,t));
+      var fotos = t.fotos.length
+        ? '<div class="carrossel">'+t.fotos.map(function(f,j){return '<img src="'+esc(f)+'" alt="'+esc(t.nome)+' foto '+(j+1)+'">'}).join('')+'</div>'+
+          (t.fotos.length > 1 ? '<div class="pontos">'+t.fotos.map(function(f,j){return '<i'+(j?'':' class="on"')+'></i>'}).join('')+'</div>' : '')
+        : '<div class="breve-info" style="padding:60px 20px"><span class="estrela">✦</span><p>foto em breve</p></div>';
+      abrir(fotos+
+        '<div class="info"><p class="n">Mini tela nº '+esc(t.numero)+(t.status==='reservada'?' · reservada':'')+'</p>'+
+        '<h2>'+esc(t.nome)+'</h2>'+
+        '<p class="valor">'+(vendida?'Vendida':esc(t.preco))+'</p>'+
+        '<p class="medidas">'+esc(L.tamanho)+' · peça única</p>'+
+        '<p class="desc">'+esc(t.descricao)+'</p>'+
+        '<a class="comprar toque" href="'+zap(msg)+'" target="_blank" rel="noopener" data-clique="comprar-'+esc(t.numero)+'">'+
+          zapIcon+'<span>'+(vendida?'Quero uma parecida':'Comprar pelo WhatsApp')+'</span></a>'+
+        '<p class="envio">'+esc(L.envio)+'</p></div>');
+      return;
+    }
+    if (b && b.dataset.breve) {
+      abrir('<div class="breve-info"><span class="estrela">✦</span>'+
+        '<h2>Mini tela nº '+b.dataset.breve+'</h2>'+
+        '<p>Esta tela ainda está sendo criada. Quer ser a primeira a ver quando ela nascer?</p>'+
+        '<a class="comprar toque" href="'+zap(L.mensagemAvise)+'" target="_blank" rel="noopener" data-clique="avise-'+b.dataset.breve+'">'+
+          '<span>Quero ser avisada</span></a></div>');
+    }
+  });
+
+  dlg.addEventListener('click', function(e){
+    if (e.target === dlg || e.target.closest('.fechar')) dlg.close();
+    var a = e.target.closest('[data-clique]'); if (a) contar(a.dataset.clique);
+  });
+  app.addEventListener('click', function(e){
+    var a = e.target.closest('[data-clique]'); if (a) contar(a.dataset.clique);
+  });
+
+  if (L.goatcounter) {
+    var s = document.createElement('script');
+    s.async = true; s.src = 'https://gc.zgo.at/count.js';
+    s.dataset.goatcounter = 'https://'+L.goatcounter+'.goatcounter.com/count';
+    document.body.appendChild(s);
+  }
+})();
+</script>
+</body>
+</html>

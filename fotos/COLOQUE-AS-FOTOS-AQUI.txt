@@ -1,0 +1,10 @@
+Fotos que o site usa (os nomes ficam no index.html, no bloco SITE):
+
+perfil.jpg            foto do topo (quadrada; ideal 600x600)
+mentoria-estrela.jpg  logo da Mentoria
+leao.jpg, flor-laranja.jpg, flor-mandala.jpg,
+torre-eiffel.jpg, casamento.jpg, textura-leao.jpg   galeria (quadradas, 720x720)
+compartilhar.jpg      imagem da prévia no WhatsApp (1200x630)
+
+Para trocar uma foto: salve a nova aqui com o MESMO nome.
+Cada foto com menos de 300 KB, para o site abrir rápido.
