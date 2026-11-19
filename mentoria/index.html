@@ -62,6 +62,14 @@
     });
   }
 
+  function telaAdmin() {
+    app.innerHTML = cabeca('área do participante') +
+      '<div class="caixa sobe"><h2>Você está como administradora</h2>' +
+      '<p>Você entrou com <b>' + esc(eu.email) + '</b>. Para ver como um participante vê, saia e entre com o e-mail e a senha do participante (por exemplo, a conta de teste).</p>' +
+      '<div class="navex"><a class="btn leve" href="painel.html">Ir para o painel</a><button class="btn" id="bTrocar">Sair e entrar como participante</button></div></div>' + rodape();
+    $('#bTrocar').onclick = sair;
+  }
+
   function telaSemAcesso() {
     app.innerHTML = cabeca('quase lá') +
       '<div class="caixa sobe"><h2>Seu e-mail ainda não está na turma</h2>' +
@@ -124,7 +132,7 @@
       if (r.error) throw r.error;
       aluno = r.data;
       var a = await sb.rpc('eh_admin'); admin = !!a.data;
-      if (!aluno && admin) { location.href = 'painel.html'; return; }
+      if (!aluno && admin) { telaAdmin(); return; }
       if (!aluno) { telaSemAcesso(); return; }
       var v = await sb.rpc('eh_aluno');
       if (!v.data) { telaEncerrado(); return; }
