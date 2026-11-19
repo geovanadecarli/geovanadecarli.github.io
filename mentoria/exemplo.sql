@@ -10,8 +10,8 @@ insert into exercicios (id, sessao, ordem, titulo, tipo, conteudo) values
 ('teste-boas-vindas', 1, 1, 'Como você chega', 'Exercício', '{
   "intro": "Um exercício curto só para testar o site. Responda com calma: tudo é salvo sozinho.",
   "campos": [
-    { "id": "energia", "tipo": "escala", "rotulo": "De 0 a 10, como está a sua energia hoje?", "rotuloMin": "esgotada", "rotuloMax": "radiante" },
-    { "id": "sentimento", "tipo": "marcar", "rotulo": "Quais palavras descrevem o seu momento?", "opcoes": ["Animada", "Cansada", "Curiosa", "Insegura", "Em paz"] },
+    { "id": "energia", "tipo": "escala", "rotulo": "De 0 a 10, como está a sua energia hoje?", "rotuloMin": "sem energia", "rotuloMax": "energia total" },
+    { "id": "sentimento", "tipo": "marcar", "rotulo": "Como você está chegando?", "opcoes": ["Com entusiasmo", "Com cansaço", "Com curiosidade", "Com insegurança", "Em paz"] },
     { "id": "expectativa", "tipo": "paragrafo", "rotulo": "O que você espera da mentoria?" },
     { "id": "metas", "tipo": "lista", "rotulo": "Três sonhos para o próximo ano", "linhas": 3 }
   ]
