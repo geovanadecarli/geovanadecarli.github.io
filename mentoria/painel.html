@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Painel · Mentoria Estrela</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#2A1640">
+<link rel="icon" href="logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:wght@600&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body class="atelie">
+<header class="topo-painel">
+  <img src="logo.jpg" alt="">
+  <div><b>Mentoria Estrela</b><span>painel da Geovana</span></div>
+  <div class="dir"><a href="./">área do mentorado</a><button class="link" id="bSair" hidden>sair</button></div>
+</header>
+<nav class="abas" id="abas" hidden>
+  <a href="#" data-aba="alunos">Mentorados</a>
+  <a href="#liberar" data-aba="liberar">Liberar exercícios</a>
+</nav>
+<main id="app"><p class="miudo">Carregando…</p></main>
+
+<script src="js/supabase-2.45.4.js"></script>
+<script src="js/comum.js"></script>
+<script>
+(function () {
+  var app = $('#app');
+  var alunos = [], sessoes = [], exercicios = [], libs = [], respostas = {}, comentarios = {};
+  var vivoTimer = null;
+
+  function toast(t) {
+    var d = document.createElement('div'); d.className = 'toast'; d.textContent = t;
+    document.body.appendChild(d); setTimeout(function () { d.remove(); }, 2600);
+  }
+  function chave(email, ex) { return email + '|' + ex; }
+  function liberadoPara(exId, email) {
+    return libs.some(function (l) { return l.exercicio_id === exId && (l.aluno_email === null || l.aluno_email === email); });
+  }
+  function libTurma(exId) { return libs.some(function (l) { return l.exercicio_id === exId && l.aluno_email === null; }); }
+  function libIndividual(exId, email) { return libs.some(function (l) { return l.exercicio_id === exId && l.aluno_email === email; }); }
+
+  async function carregar() {
+    var rs = await Promise.all([
+      sb.from('alunos').select('*').order('nome'),
+      sb.from('sessoes').select('*').order('numero'),
+      sb.from('exercicios').select('*').order('sessao').order('ordem'),
+      sb.from('liberacoes').select('*'),
+      sb.from('respostas').select('*'),
+      sb.from('comentarios').select('*')
+    ]);
+    for (var i = 0; i < rs.length; i++) if (rs[i].error) throw rs[i].error;
+    alunos = rs[0].data; sessoes = rs[1].data; exercicios = rs[2].data; libs = rs[3].data;
+    respostas = {}; rs[4].data.forEach(function (r) { respostas[chave(r.aluno_email, r.exercicio_id)] = r; });
+    comentarios = {}; rs[5].data.forEach(function (c) { comentarios[chave(c.aluno_email, c.exercicio_id)] = c; });
+  }
+
+  /* ---------- login ---------- */
+  function telaLogin(aviso, tipo) {
+    $('#abas').hidden = true; $('#bSair').hidden = true;
+    app.innerHTML = '<form class="cartao" id="f" style="max-width:420px;margin:30px auto"><h2>Entrar no painel</h2>' +
+      '<p style="margin-bottom:10px">Use o e-mail de administradora. Você recebe um link de acesso.</p>' +
+      '<div class="form-linha"><input type="email" id="email" required autocomplete="email" placeholder="seu e-mail" value="' + esc(lerLocal('me_email') || '') + '"><button class="btn">Receber link</button></div>' +
+      (aviso ? '<div class="aviso ' + (tipo || 'erro') + '">' + aviso + '</div>' : '') + '</form>';
+    $('#f').onsubmit = async function (e) {
+      e.preventDefault();
+      var email = $('#email').value.trim().toLowerCase(); guardarLocal('me_email', email);
+      var r = await sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } });
+      telaLogin(r.error ? esc(msgErro(r.error)) : 'Link enviado para <b>' + esc(email) + '</b>.', r.error ? 'erro' : 'ok');
+    };
+  }
+
+  /* ---------- mentorados ---------- */
+  function resumoAluno(a) {
+    var lib = exercicios.filter(function (e) { return liberadoPara(e.id, a.email); });
+    var feitos = 0, ultima = null;
+    lib.forEach(function (e) {
+      var r = respostas[chave(a.email, e.id)];
+      if (!r) return;
+      var p = progresso(e.conteudo, r.dados);
+      if (p.total && p.feitos >= p.total) feitos++;
+      if (!ultima || r.atualizado_em > ultima) ultima = r.atualizado_em;
+    });
+    return { lib: lib.length, feitos: feitos, ultima: ultima };
+  }
+
+  function telaAlunos() {
+    var h = '<h2>Mentorados <span class="pill cinza" style="font:500 13px Jost">' + alunos.length + '</span></h2>';
+    h += '<form class="cartao" id="fNovo"><h3 style="margin-bottom:8px">Adicionar mentorado</h3>' +
+      '<div class="form-linha"><input id="nNome" placeholder="Nome" required><input id="nEmail" type="email" placeholder="E-mail que ele vai usar para entrar" required><button class="btn">Adicionar</button></div>' +
+      '<p class="miudo" style="margin-top:8px">Vários de uma vez: cole uma pessoa por linha no formato <b>Nome; email</b> e toque em "Adicionar vários".</p>' +
+      '<details style="margin-top:6px"><summary class="miudo" style="cursor:pointer">Adicionar vários</summary><div class="form-linha" style="margin-top:8px"><textarea id="nVarios" rows="4" placeholder="Ana Souza; ana@email.com&#10;Bruno Lima; bruno@email.com"></textarea><button type="button" class="btn ouro" id="bVarios">Adicionar vários</button></div></details>' +
+      '</form>';
+    if (!alunos.length) h += '<p class="miudo">Nenhum mentorado ainda. Adicione acima: só quem estiver nesta lista consegue entrar.</p>';
+    h += '<div class="grade-alunos">';
+    alunos.forEach(function (a) {
+      var r = resumoAluno(a);
+      h += '<a class="cartao aluno" href="#aluno=' + encodeURIComponent(a.email) + '"><div class="nome">' + esc(a.nome || '(sem nome)') + '</div><div class="em">' + esc(a.email) + '</div>' +
+        '<div class="barrinha"><div style="width:' + (r.lib ? Math.round(r.feitos / r.lib * 100) : 0) + '%"></div></div>' +
+        '<div class="linha-info"><span>' + r.feitos + ' de ' + r.lib + ' respondidos</span><span>' + (r.ultima ? quando(r.ultima) : (a.aceite_privacidade ? 'entrou' : 'ainda não entrou')) + '</span></div></a>';
+    });
+    h += '</div>';
+    app.innerHTML = h;
+
+    $('#fNovo').onsubmit = async function (e) {
+      e.preventDefault();
+      await adicionar([{ nome: $('#nNome').value.trim(), email: $('#nEmail').value.trim().toLowerCase() }]);
+    };
+    $('#bVarios').onclick = async function () {
+      var lista = $('#nVarios').value.split('\n').map(function (l) {
+        var p = l.split(/[;,\t]/); if (p.length < 2) return null;
+        return { nome: p[0].trim(), email: p[1].trim().toLowerCase() };
+      }).filter(function (x) { return x && /@/.test(x.email); });
+      if (!lista.length) { toast('Use o formato: Nome; email'); return; }
+      await adicionar(lista);
+    };
+  }
+  async function adicionar(lista) {
+    var r = await sb.from('alunos').upsert(lista, { onConflict: 'email' });
+    if (r.error) { toast(msgErro(r.error)); return; }
+    toast(lista.length > 1 ? lista.length + ' mentorados adicionados' : 'Mentorado adicionado');
+    await carregar(); rota();
+  }
+
+  /* ---------- um mentorado ---------- */
+  function telaAluno(email) {
+    var a = alunos.filter(function (x) { return x.email === email; })[0];
+    if (!a) { location.hash = ''; return; }
+    var h = '<p><a href="#" class="miudo">← todos os mentorados</a></p>' +
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0">' + esc(a.nome || a.email) + '</h2><span class="vivo">atualiza sozinho</span></div>' +
+      '<p class="miudo" style="margin-bottom:16px">' + esc(a.email) + (a.aceite_privacidade ? ' · aceitou a privacidade em ' + new Date(a.aceite_privacidade).toLocaleDateString('pt-BR') : ' · ainda não entrou') + '</p>';
+    if (!exercicios.length) h += '<p class="miudo">Nenhum exercício cadastrado ainda.</p>';
+    sessoes.forEach(function (s) {
+      var exs = exercicios.filter(function (e) { return e.sessao === s.numero; });
+      if (!exs.length) return;
+      h += '<section class="sessao-bloco"><h3>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</h3>';
+      exs.forEach(function (e) { h += blocoEx(a, e); });
+      h += '</section>';
+    });
+    h += '<details class="cartao" style="margin-top:30px"><summary class="miudo" style="cursor:pointer">Editar ou remover mentorado</summary>' +
+      '<div class="form-linha" style="margin-top:10px"><input id="eNome" value="' + esc(a.nome) + '"><button class="btn peq" id="bNome">Salvar nome</button></div>' +
+      '<p class="miudo" style="margin:12px 0 6px">Remover apaga também todas as respostas e comentários deste mentorado (pedido de exclusão LGPD).</p>' +
+      '<button class="btn leve peq" id="bRemover" style="color:#A3283A;border-color:#E9B8BF">Remover ' + esc(a.nome || a.email) + '</button></details>';
+    var abertos = $$('details.ex[open]').map(function (d) { return d.getAttribute('data-ex'); });
+    app.innerHTML = h;
+    abertos.forEach(function (id) { var d = $('details.ex[data-ex="' + CSS.escape(id) + '"]'); if (d) d.open = true; });
+    ligarAluno(a);
+  }
+
+  function blocoEx(a, e) {
+    var k = chave(a.email, e.id), r = respostas[k], c = comentarios[k];
+    var lib = liberadoPara(e.id, a.email), turma = libTurma(e.id);
+    var p = progresso(e.conteudo, r && r.dados);
+    var est = !lib ? '<span class="pill cinza">não liberado</span>'
+      : (p.total && p.feitos >= p.total) ? '<span class="pill verde">respondido</span>'
+      : p.feitos ? '<span class="pill">' + p.feitos + ' de ' + p.total + '</span>' : '<span class="pill ouro">liberado</span>';
+    var h = '<details class="ex" data-ex="' + esc(e.id) + '"><summary><span class="t">' + esc(e.titulo) + ' <span class="miudo">· ' + esc(e.tipo) + '</span></span>' + est +
+      (r ? '<span class="miudo">' + quando(r.atualizado_em) + '</span>' : '') + (c && c.texto.trim() ? '<span title="Você comentou">💬</span>' : '') + '</summary><div class="ex-corpo">';
+    h += '<p style="margin-bottom:12px"><label class="miudo" style="display:inline-flex;gap:8px;align-items:center;cursor:pointer">' +
+      '<input type="checkbox" class="libInd" data-ex="' + esc(e.id) + '"' + (lib ? ' checked' : '') + (turma ? ' disabled' : '') + ' style="width:18px;height:18px;accent-color:var(--rosa)"> ' +
+      (turma ? 'liberado para a turma toda' : 'liberado para ' + esc(a.nome || 'este mentorado')) + '</label></p>';
+    h += '<div class="respostas-ex">' + htmlCampos(e.conteudo, r && r.dados, true) + '</div>';
+    h += '<div class="caixa-com"><label for="com_' + esc(e.id) + '">Seu comentário</label>' +
+      '<textarea id="com_' + esc(e.id) + '" data-ex="' + esc(e.id) + '" placeholder="Escreva aqui durante a sessão. O mentorado vê embaixo do exercício.">' + esc(c ? c.texto : '') + '</textarea>' +
+      '<div class="acoes"><span class="estcom"></span><button class="btn peq ouro bCom" data-ex="' + esc(e.id) + '">Salvar comentário</button></div></div>';
+    return h + '</div></details>';
+  }
+
+  function ligarAluno(a) {
+    $$('.bCom').forEach(function (b) {
+      b.onclick = async function () {
+        var id = b.getAttribute('data-ex'), ta = $('textarea[data-ex="' + CSS.escape(id) + '"]'), st = b.parentNode.querySelector('.estcom');
+        b.disabled = true; st.textContent = 'salvando…';
+        var r = await sb.from('comentarios').upsert({ aluno_email: a.email, exercicio_id: id, texto: ta.value, atualizado_em: new Date().toISOString() });
+        b.disabled = false;
+        if (r.error) { st.textContent = msgErro(r.error); return; }
+        comentarios[chave(a.email, id)] = { aluno_email: a.email, exercicio_id: id, texto: ta.value };
+        ta.dataset.sujo = ''; st.textContent = 'salvo ✓';
+      };
+    });
+    $$('.caixa-com textarea').forEach(function (t) { t.oninput = function () { t.dataset.sujo = '1'; t.parentNode.querySelector('.estcom').textContent = 'não salvo'; }; });
+    $$('.libInd').forEach(function (cb) {
+      cb.onchange = async function () { await alternar(cb.getAttribute('data-ex'), a.email, cb.checked); telaAluno(a.email); };
+    });
+    $('#bNome').onclick = async function () {
+      var r = await sb.from('alunos').update({ nome: $('#eNome').value.trim() }).eq('email', a.email);
+      if (r.error) { toast(msgErro(r.error)); return; }
+      a.nome = $('#eNome').value.trim(); toast('Nome salvo'); telaAluno(a.email);
+    };
+    $('#bRemover').onclick = async function () {
+      if (!confirm('Remover ' + (a.nome || a.email) + ' e apagar todas as respostas? Isso não pode ser desfeito.')) return;
+      var r = await sb.from('alunos').delete().eq('email', a.email);
+      if (r.error) { toast(msgErro(r.error)); return; }
+      toast('Removido'); await carregar(); location.hash = '';
+    };
+  }
+
+  /* atualiza as respostas sozinho enquanto a página do mentorado está aberta */
+  function iniciarVivo(email) {
+    clearInterval(vivoTimer);
+    vivoTimer = setInterval(async function () {
+      if (document.hidden) return;
+      var r = await sb.from('respostas').select('*').eq('aluno_email', email);
+      if (r.error) return;
+      var mudou = false;
+      r.data.forEach(function (x) {
+        var k = chave(x.aluno_email, x.exercicio_id);
+        if (!respostas[k] || respostas[k].atualizado_em !== x.atualizado_em) { respostas[k] = x; mudou = true; }
+      });
+      if (!mudou) return;
+      /* só redesenha as respostas, sem mexer no comentário que você está digitando */
+      var a = alunos.filter(function (x) { return x.email === email; })[0];
+      $$('details.ex').forEach(function (d) {
+        var e = exercicios.filter(function (x) { return x.id === d.getAttribute('data-ex'); })[0];
+        if (!e) return;
+        var novo = document.createElement('div'); novo.innerHTML = blocoEx(a, e);
+        var nd = novo.firstChild;
+        d.querySelector('summary').innerHTML = nd.querySelector('summary').innerHTML;
+        d.querySelector('.respostas-ex').innerHTML = nd.querySelector('.respostas-ex').innerHTML;
+      });
+    }, 8000);
+  }
+
+  /* ---------- liberar ---------- */
+  async function alternar(exId, email, ligar) {
+    var r;
+    if (ligar) r = await sb.from('liberacoes').insert({ exercicio_id: exId, aluno_email: email });
+    else if (email === null) r = await sb.from('liberacoes').delete().eq('exercicio_id', exId).is('aluno_email', null);
+    else r = await sb.from('liberacoes').delete().eq('exercicio_id', exId).eq('aluno_email', email);
+    if (r.error && !/duplicate/.test(r.error.message)) { toast(msgErro(r.error)); }
+    var l = await sb.from('liberacoes').select('*'); if (!l.error) libs = l.data;
+    toast(ligar ? 'Liberado ✓' : 'Bloqueado');
+  }
+
+  function telaLiberar() {
+    var h = '<h2>Liberar exercícios</h2><p class="miudo" style="margin-bottom:12px">Marque a coluna <b>Turma</b> para liberar para todos, ou só a coluna de um mentorado. O mentorado vê na hora em que abre ou volta para a página.</p>';
+    if (!exercicios.length) { app.innerHTML = h + '<p class="miudo">Nenhum exercício cadastrado ainda.</p>'; return; }
+    h += '<div class="tabela-wrap"><table class="lib"><thead><tr><th>Exercício</th><th class="turma">Turma toda</th>';
+    alunos.forEach(function (a) { h += '<th title="' + esc(a.email) + '">' + esc((a.nome || a.email).split(' ')[0]) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    sessoes.forEach(function (s) {
+      var exs = exercicios.filter(function (e) { return e.sessao === s.numero; });
+      if (!exs.length) return;
+      var todos = exs.every(function (e) { return libTurma(e.id); });
+      h += '<tr class="sess"><td>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</td><td class="turma"><button class="btn peq ' + (todos ? 'leve' : '') + ' bSessao" data-s="' + s.numero + '" data-on="' + (todos ? '0' : '1') + '">' + (todos ? 'bloquear sessão' : 'liberar sessão') + '</button></td><td colspan="' + alunos.length + '"></td></tr>';
+      exs.forEach(function (e) {
+        var t = libTurma(e.id);
+        h += '<tr><td>' + esc(e.titulo) + ' <span class="miudo">· ' + esc(e.tipo) + '</span></td><td class="turma"><input type="checkbox" class="cb" data-ex="' + esc(e.id) + '" data-a=""' + (t ? ' checked' : '') + ' aria-label="Turma toda: ' + esc(e.titulo) + '"></td>';
+        alunos.forEach(function (a) {
+          h += '<td><input type="checkbox" class="cb" data-ex="' + esc(e.id) + '" data-a="' + esc(a.email) + '"' + (t || libIndividual(e.id, a.email) ? ' checked' : '') + (t ? ' disabled title="liberado para a turma"' : '') + ' aria-label="' + esc(a.nome) + ': ' + esc(e.titulo) + '"></td>';
+        });
+        h += '</tr>';
+      });
+    });
+    h += '</tbody></table></div>';
+    app.innerHTML = h;
+    $$('.cb').forEach(function (cb) {
+      cb.onchange = async function () { cb.disabled = true; await alternar(cb.getAttribute('data-ex'), cb.getAttribute('data-a') || null, cb.checked); telaLiberar(); };
+    });
+    $$('.bSessao').forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true;
+        var n = Number(b.getAttribute('data-s')), on = b.getAttribute('data-on') === '1';
+        var ids = exercicios.filter(function (e) { return e.sessao === n; }).map(function (e) { return e.id; });
+        var r = on
+          ? await sb.from('liberacoes').insert(ids.filter(function (id) { return !libTurma(id); }).map(function (id) { return { exercicio_id: id, aluno_email: null }; }))
+          : await sb.from('liberacoes').delete().in('exercicio_id', ids).is('aluno_email', null);
+        if (r.error) toast(msgErro(r.error)); else toast(on ? 'Sessão liberada para a turma ✓' : 'Sessão bloqueada');
+        var l = await sb.from('liberacoes').select('*'); if (!l.error) libs = l.data;
+        telaLiberar();
+      };
+    });
+  }
+
+  /* ---------- rotas ---------- */
+  function rota() {
+    clearInterval(vivoTimer);
+    var hsh = location.hash, aba = 'alunos';
+    var m = hsh.match(/^#aluno=(.+)$/);
+    if (hsh === '#liberar') { aba = 'liberar'; telaLiberar(); }
+    else if (m) { var em = decodeURIComponent(m[1]); telaAluno(em); iniciarVivo(em); }
+    else telaAlunos();
+    $$('#abas a').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-aba') === aba); });
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', async function () {
+    try { await carregar(); } catch (e) {}
+    rota();
+  });
+  window.addEventListener('beforeunload', function (e) {
+    if ($$('.caixa-com textarea').some(function (t) { return t.dataset.sujo === '1'; })) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  var iniciado = false;
+  async function iniciar(s) {
+    if (iniciado) return; iniciado = true;
+    if (/access_token|refresh_token/.test(location.hash)) history.replaceState(null, '', location.pathname);
+    $('#bSair').hidden = false;
+    $('#bSair').onclick = async function () { await sb.auth.signOut(); iniciado = false; telaLogin(); };
+    var a = await sb.rpc('eh_admin');
+    if (!a.data) {
+      app.innerHTML = '<div class="cartao" style="max-width:460px;margin:30px auto"><h2>Sem acesso ao painel</h2><p>Você entrou como <b>' + esc(s.user.email) + '</b>, que não é administradora. <a href="./">Ir para a área do mentorado</a>.</p></div>';
+      return;
+    }
+    $('#abas').hidden = false;
+    try { await carregar(); rota(); }
+    catch (err) { app.innerHTML = '<div class="cartao"><p>' + esc(msgErro(err)) + '</p><button class="btn" onclick="location.reload()">Tentar de novo</button></div>'; }
+  }
+  sb.auth.getSession().then(function (r) { if (r.data.session) iniciar(r.data.session); else telaLogin(); });
+  sb.auth.onAuthStateChange(function (ev, s) { if (ev === 'SIGNED_IN' && s) iniciar(s); });
+})();
+</script>
+</body>
+</html>

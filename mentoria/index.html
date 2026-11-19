@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mentoria Estrela · Geovana De Carli</title>
+<meta name="description" content="Área dos mentorados da Mentoria Estrela.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#2A1640">
+<link rel="icon" href="logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Cormorant+Garamond:wght@600&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body class="ceu">
+<main id="app" aria-live="polite">
+  <div class="cabeca"><img src="logo.jpg" alt=""><h1>Mentoria Estrela</h1><div class="sub">carregando…</div></div>
+</main>
+
+<script src="js/supabase-2.45.4.js"></script>
+<script src="js/comum.js"></script>
+<script>
+(function () {
+  var app = $('#app');
+  var eu = null, aluno = null, admin = false;
+  var sessoes = [], exercicios = [], respostas = {}, comentarios = {};
+  var salvarTimer = null, pollTimer = null, exAtual = null;
+
+  function cabeca(sub) {
+    return '<div class="cabeca sobe"><img src="logo.jpg" alt="Logo da Mentoria Estrela"><h1>Mentoria Estrela</h1><div class="sub">' + esc(sub) + '</div></div>';
+  }
+  function rodape() {
+    return '<p class="rodape"><a href="privacidade.html">Privacidade</a> · <a href="../">Geovana De Carli</a></p>';
+  }
+
+  /* ---------- entrar ---------- */
+  function telaLogin(aviso, tipoAviso) {
+    pararPoll();
+    app.innerHTML = cabeca('com a Geovana De Carli') +
+      '<form class="caixa sobe" id="fLogin">' +
+      '<h2>Entrar</h2><p>Digite o seu e-mail. Vamos te mandar um link de acesso, sem senha.</p>' +
+      '<label class="miudo" for="email">Seu e-mail</label>' +
+      '<input class="campo-email" id="email" type="email" autocomplete="email" inputmode="email" required placeholder="voce@exemplo.com" value="' + esc(lerLocal('me_email') || '') + '">' +
+      '<button class="btn" style="width:100%" id="bEnviar">Receber link de acesso</button>' +
+      (aviso ? '<div class="aviso ' + (tipoAviso || 'erro') + '">' + aviso + '</div>' : '') +
+      '<p class="miudo" style="margin:14px 0 0">Abra o link no mesmo aparelho em que vai responder. Não chegou? Olhe o spam ou a aba Promoções.</p>' +
+      '</form>' + rodape();
+    $('#fLogin').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var email = $('#email').value.trim().toLowerCase(), b = $('#bEnviar');
+      if (!email) return;
+      guardarLocal('me_email', email);
+      b.disabled = true; b.textContent = 'Enviando…';
+      var r = await sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } });
+      if (r.error) { telaLogin(esc(msgErro(r.error))); return; }
+      telaLogin('Pronto! Enviamos o link para <b>' + esc(email) + '</b>. Abra o seu e-mail e toque em "Entrar".', 'ok');
+    });
+  }
+
+  function telaSemAcesso() {
+    app.innerHTML = cabeca('quase lá') +
+      '<div class="caixa sobe"><h2>Seu e-mail ainda não está na turma</h2>' +
+      '<p>Você entrou como <b>' + esc(eu.email) + '</b>, mas esse e-mail não está na lista da mentoria.</p>' +
+      '<p>Se usou outro e-mail na inscrição, saia e entre com ele. Ou peça para a Geovana te incluir.</p>' +
+      '<div class="navex"><button class="btn leve" id="bSair">Sair e usar outro e-mail</button>' +
+      '<a class="btn" target="_blank" rel="noopener" href="https://wa.me/' + CONFIG.whatsapp + '?text=' + encodeURIComponent('Oi Geovana! Não consigo entrar na área da Mentoria Estrela com o e-mail ' + eu.email) + '">Falar com a Geovana</a></div></div>' + rodape();
+    $('#bSair').onclick = sair;
+  }
+
+  function telaAceite() {
+    app.innerHTML = cabeca('boas-vindas' + (aluno.nome ? ', ' + aluno.nome.split(' ')[0] : '')) +
+      '<div class="caixa sobe"><h2>Antes de começar</h2>' +
+      '<p>Aqui você responde os exercícios da mentoria. As suas respostas ficam guardadas com segurança e <b>só você e a Geovana</b> podem ver.</p>' +
+      '<p>Usamos o seu e-mail e as suas respostas apenas para a mentoria. Você pode pedir para apagar tudo quando quiser.</p>' +
+      '<p><a href="privacidade.html" style="color:var(--rosa)">Ler o aviso de privacidade completo</a></p>' +
+      '<button class="btn" style="width:100%" id="bAceito">Li e concordo, vamos começar</button></div>' + rodape();
+    $('#bAceito').onclick = async function () {
+      this.disabled = true;
+      var r = await sb.rpc('aceitar_privacidade');
+      if (r.error) { alert(msgErro(r.error)); this.disabled = false; return; }
+      aluno.aceite_privacidade = new Date().toISOString();
+      rota();
+    };
+  }
+
+  async function sair() { pararPoll(); await sb.auth.signOut(); eu = null; telaLogin(); }
+
+  /* ---------- dados ---------- */
+  async function carregar() {
+    var rs = await Promise.all([
+      sb.from('sessoes').select('*').order('numero'),
+      sb.from('exercicios').select('id,sessao,ordem,titulo,tipo,conteudo').order('sessao').order('ordem'),
+      sb.from('respostas').select('exercicio_id,dados,atualizado_em').eq('aluno_email', eu.email),
+      sb.from('comentarios').select('exercicio_id,texto,atualizado_em').eq('aluno_email', eu.email)
+    ]);
+    for (var i = 0; i < rs.length; i++) if (rs[i].error) throw rs[i].error;
+    sessoes = rs[0].data; exercicios = rs[1].data;
+    respostas = {}; rs[2].data.forEach(function (r) { respostas[r.exercicio_id] = r; });
+    comentarios = {}; rs[3].data.forEach(function (c) { if (c.texto.trim()) comentarios[c.exercicio_id] = c; });
+  }
+
+  async function iniciar(sessao) {
+    if (eu && eu.id === sessao.user.id) return;
+    if (/access_token|refresh_token/.test(location.hash)) history.replaceState(null, '', location.pathname);
+    eu = { email: (sessao.user.email || '').toLowerCase(), id: sessao.user.id };
+    app.innerHTML = cabeca('abrindo a sua trilha…');
+    try {
+      var r = await sb.from('alunos').select('*').eq('email', eu.email).maybeSingle();
+      if (r.error) throw r.error;
+      aluno = r.data;
+      var a = await sb.rpc('eh_admin'); admin = !!a.data;
+      if (!aluno && admin) { location.href = 'painel.html'; return; }
+      if (!aluno) { telaSemAcesso(); return; }
+      if (!aluno.aceite_privacidade) { telaAceite(); return; }
+      await carregar();
+      rota();
+    } catch (err) {
+      app.innerHTML = cabeca('ops') + '<div class="caixa"><h2>Não consegui abrir</h2><p>' + esc(msgErro(err)) + '</p><button class="btn" onclick="location.reload()">Tentar de novo</button> <button class="link" id="bSair">sair</button></div>';
+      $('#bSair').onclick = sair;
+    }
+  }
+
+  /* ---------- trilha ---------- */
+  function estadoEx(ex) {
+    var p = progresso(ex.conteudo, respostas[ex.id] && respostas[ex.id].dados);
+    if (p.total && p.feitos >= p.total) return '<span class="estado feito">feito ✓</span>';
+    if (p.feitos > 0) return '<span class="estado">continuar →</span>';
+    return '<span class="estado comecar">começar</span>';
+  }
+
+  function telaTrilha() {
+    exAtual = null; pararPoll();
+    var porSessao = {};
+    exercicios.forEach(function (e) { (porSessao[e.sessao] = porSessao[e.sessao] || []).push(e); });
+    var h = '<div class="barra-topo"><span>' + esc(eu.email) + '</span><span>' +
+      (admin ? '<a href="painel.html">painel</a> · ' : '') + '<button class="link" id="bSair" style="padding:0">sair</button></span></div>' +
+      cabeca('sua trilha' + (aluno.nome ? ', ' + aluno.nome.split(' ')[0] : '')) + '<div class="trilha">';
+    if (!sessoes.length) h += '<p class="miudo" style="padding-left:46px">As sessões aparecem aqui assim que a Geovana liberar.</p>';
+    sessoes.forEach(function (s, i) {
+      var exs = porSessao[s.numero] || [];
+      var tudo = exs.length && exs.every(function (e) { var p = progresso(e.conteudo, respostas[e.id] && respostas[e.id].dados); return p.total && p.feitos >= p.total; });
+      h += '<div class="passo sobe" style="animation-delay:' + (i * 60) + 'ms"><div class="estrela ' + (exs.length ? 'on' : 'off') + '" aria-hidden="true">' + (exs.length ? '★' : '☆') + '</div><div class="x">' +
+        '<b>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</b>' +
+        '<small>' + (exs.length ? (tudo ? 'tudo respondido' : exs.length + (exs.length > 1 ? ' atividades liberadas' : ' atividade liberada')) : 'em breve') + '</small>';
+      if (exs.length) {
+        h += '<div class="lista-ex">';
+        exs.forEach(function (e) {
+          h += '<a href="#ex=' + encodeURIComponent(e.id) + '"><span class="t">' + esc(e.titulo) +
+            (comentarios[e.id] ? '<span class="ponto" title="A Geovana comentou"></span>' : '') +
+            '<small>' + esc(e.tipo) + (comentarios[e.id] ? ' · a Geovana comentou' : '') + '</small></span>' + estadoEx(e) + '</a>';
+        });
+        h += '</div>';
+      }
+      h += '</div></div>';
+    });
+    h += '</div>' + rodape();
+    app.innerHTML = h;
+    $('#bSair').onclick = sair;
+  }
+
+  /* ---------- exercício ---------- */
+  function telaExercicio(id) {
+    var ex = exercicios.filter(function (e) { return e.id === id; })[0];
+    if (!ex) { location.hash = ''; return; }
+    exAtual = ex;
+    var s = sessoes.filter(function (x) { return x.numero === ex.sessao; })[0] || { numero: ex.sessao, titulo: '' };
+    var salvoServidor = respostas[id] ? respostas[id].dados : {};
+    var rascunho = lerLocal('rasc_' + eu.email + '_' + id);
+    var dados = salvoServidor;
+    var pendente = false;
+    if (rascunho && (!respostas[id] || rascunho.em > Date.parse(respostas[id].atualizado_em))) { dados = rascunho.dados; pendente = true; }
+
+    var lista = exercicios, pos = lista.indexOf(ex);
+    var ant = lista[pos - 1], prox = lista[pos + 1];
+    var p = progresso(ex.conteudo, dados);
+
+    app.innerHTML =
+      '<div class="cabeca" style="padding-bottom:8px"><h1 style="font-size:24px">Sessão ' + s.numero + (s.titulo ? ' · ' + esc(s.titulo) : '') + '</h1><div class="sub">' + esc(ex.titulo) + '</div></div>' +
+      '<div class="folha sobe"><a class="voltar" href="#">← voltar para a trilha</a>' +
+      '<div class="prog" aria-hidden="true"><div style="width:' + (p.total ? Math.round(p.feitos / p.total * 100) : 0) + '%"></div></div>' +
+      '<form id="fEx" onsubmit="return false">' + htmlCampos(ex.conteudo, dados, false) + '</form>' +
+      '<div class="salvo" id="salvo" role="status">' + (respostas[id] ? 'salvo ✓' : '') + '</div>' +
+      '<div id="com"></div>' +
+      '<div class="navex">' + (ant ? '<a class="btn leve peq" href="#ex=' + encodeURIComponent(ant.id) + '">← anterior</a>' : '<span></span>') +
+      (prox ? '<a class="btn peq" href="#ex=' + encodeURIComponent(prox.id) + '">próxima →</a>' : '<a class="btn peq" href="#">voltar para a trilha</a>') + '</div>' +
+      '</div>' + rodape();
+    mostrarComentario();
+    window.scrollTo(0, 0);
+
+    var form = $('#fEx');
+    ligarCampos(form, function () {
+      var d = lerCampos(form);
+      guardarLocal('rasc_' + eu.email + '_' + id, { dados: d, em: Date.now() });
+      var pr = progresso(ex.conteudo, d);
+      $('.prog div').style.width = (pr.total ? Math.round(pr.feitos / pr.total * 100) : 0) + '%';
+      $('#salvo').className = 'salvo'; $('#salvo').textContent = '…';
+      clearTimeout(salvarTimer);
+      salvarTimer = setTimeout(function () { salvar(ex, d); }, 900);
+    });
+    if (pendente) salvar(ex, dados);
+    iniciarPoll();
+  }
+
+  async function salvar(ex, d) {
+    var el = $('#salvo');
+    var agora = new Date().toISOString();
+    var r = await sb.from('respostas').upsert({ aluno_email: eu.email, exercicio_id: ex.id, dados: d, atualizado_em: agora });
+    if (r.error) {
+      if (el) { el.className = 'salvo erro'; el.textContent = 'Não salvou: ' + msgErro(r.error) + ' O texto ficou guardado neste aparelho; vamos tentar de novo.'; }
+      clearTimeout(salvarTimer);
+      salvarTimer = setTimeout(function () { salvar(ex, d); }, 8000);
+      return;
+    }
+    respostas[ex.id] = { exercicio_id: ex.id, dados: d, atualizado_em: agora };
+    apagarLocal('rasc_' + eu.email + '_' + ex.id);
+    if (el && exAtual === ex) { el.className = 'salvo'; el.textContent = 'salvo ✓'; }
+  }
+
+  function mostrarComentario() {
+    var c = exAtual && comentarios[exAtual.id], box = $('#com');
+    if (!box) return;
+    box.innerHTML = c ? '<div class="comentario"><b>Geovana comentou</b>' + texto(c.texto) + '</div>' : '';
+  }
+
+  /* durante a sessão, o comentário da Geovana aparece sozinho */
+  function iniciarPoll() {
+    pararPoll();
+    pollTimer = setInterval(async function () {
+      if (!exAtual || document.hidden) return;
+      var r = await sb.from('comentarios').select('exercicio_id,texto,atualizado_em').eq('aluno_email', eu.email).eq('exercicio_id', exAtual.id).maybeSingle();
+      if (r.error) return;
+      if (r.data && r.data.texto.trim()) comentarios[exAtual.id] = r.data; else delete comentarios[exAtual.id];
+      mostrarComentario();
+    }, 15000);
+  }
+  function pararPoll() { clearInterval(pollTimer); pollTimer = null; }
+
+  /* ---------- rotas ---------- */
+  function rota() {
+    if (!eu || !aluno) return;
+    var m = location.hash.match(/^#ex=(.+)$/);
+    if (m) telaExercicio(decodeURIComponent(m[1])); else telaTrilha();
+  }
+  window.addEventListener('hashchange', function () {
+    if (salvarTimer && exAtual) { clearTimeout(salvarTimer); var f = $('#fEx'); if (f) salvar(exAtual, lerCampos(f)); }
+    rota();
+  });
+  /* recarrega ao voltar para a aba (a Geovana pode ter liberado algo novo) */
+  document.addEventListener('visibilitychange', async function () {
+    if (document.hidden || !aluno || !aluno.aceite_privacidade || exAtual) return;
+    try { await carregar(); telaTrilha(); } catch (e) {}
+  });
+
+  /* ---------- início ---------- */
+  var erroLink = /error_description=([^&]+)/.exec(location.hash);
+  sb.auth.getSession().then(function (r) {
+    var s = r.data && r.data.session;
+    if (s) { iniciar(s); return; }
+    if (erroLink) { history.replaceState(null, '', location.pathname); telaLogin('Esse link expirou ou já foi usado. Peça um novo abaixo.'); return; }
+    telaLogin();
+  });
+  sb.auth.onAuthStateChange(function (ev, s) {
+    if (ev === 'SIGNED_IN' && s) iniciar(s);
+    if (ev === 'SIGNED_OUT') { eu = null; aluno = null; }
+  });
+})();
+</script>
+</body>
+</html>
