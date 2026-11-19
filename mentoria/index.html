@@ -39,22 +39,25 @@
     pararPoll();
     app.innerHTML = cabeca('com a Geovana De Carli') +
       '<form class="caixa sobe" id="fLogin">' +
-      '<h2>Entrar</h2><p>Digite o seu e-mail. Vamos te mandar um link de acesso, sem senha.</p>' +
-      '<label class="miudo" for="email">Seu e-mail</label>' +
-      '<input class="campo-email" id="email" type="email" autocomplete="email" inputmode="email" required placeholder="voce@exemplo.com" value="' + esc(lerLocal('me_email') || '') + '">' +
-      '<button class="btn" style="width:100%" id="bEnviar">Receber link de acesso</button>' +
+      '<h2>Entrar</h2><p>Use o e-mail e a senha que a Geovana te enviou.</p>' +
+      '<label class="miudo" for="email">E-mail</label>' +
+      '<input class="campo-email" id="email" type="email" autocomplete="username" inputmode="email" required placeholder="voce@exemplo.com" value="' + esc(lerLocal('me_email') || '') + '">' +
+      '<label class="miudo" for="senha">Senha</label>' +
+      '<input class="campo-email" id="senha" type="password" autocomplete="current-password" required>' +
+      '<label class="miudo" style="display:flex;gap:8px;align-items:center;margin:-4px 0 14px;cursor:pointer"><input type="checkbox" id="ver"> mostrar senha</label>' +
+      '<button class="btn" style="width:100%" id="bEntrar">Entrar</button>' +
       (aviso ? '<div class="aviso ' + (tipoAviso || 'erro') + '">' + aviso + '</div>' : '') +
-      '<p class="miudo" style="margin:14px 0 0">Abra o link no mesmo aparelho em que vai responder. Não chegou? Olhe o spam ou a aba Promoções.</p>' +
+      '<p class="miudo" style="margin:14px 0 0">Esqueceu a senha? <a style="color:var(--rosa)" target="_blank" rel="noopener" href="https://wa.me/' + CONFIG.whatsapp + '?text=' + encodeURIComponent('Oi Geovana! Esqueci a minha senha da área da Mentoria Estrela.') + '">Peça uma nova para a Geovana</a>.</p>' +
       '</form>' + rodape();
+    $('#ver').onchange = function () { $('#senha').type = this.checked ? 'text' : 'password'; };
     $('#fLogin').addEventListener('submit', async function (e) {
       e.preventDefault();
-      var email = $('#email').value.trim().toLowerCase(), b = $('#bEnviar');
-      if (!email) return;
+      var email = $('#email').value.trim().toLowerCase(), b = $('#bEntrar');
       guardarLocal('me_email', email);
-      b.disabled = true; b.textContent = 'Enviando…';
-      var r = await sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } });
+      b.disabled = true; b.textContent = 'Entrando…';
+      var r = await sb.auth.signInWithPassword({ email: email, password: $('#senha').value });
       if (r.error) { telaLogin(esc(msgErro(r.error))); return; }
-      telaLogin('Pronto! Enviamos o link para <b>' + esc(email) + '</b>. Abra o seu e-mail e toque em "Entrar".', 'ok');
+      iniciar(r.data.session);
     });
   }
 
@@ -62,7 +65,7 @@
     app.innerHTML = cabeca('quase lá') +
       '<div class="caixa sobe"><h2>Seu e-mail ainda não está na turma</h2>' +
       '<p>Você entrou como <b>' + esc(eu.email) + '</b>, mas esse e-mail não está na lista da mentoria.</p>' +
-      '<p>Se usou outro e-mail na inscrição, saia e entre com ele. Ou peça para a Geovana te incluir.</p>' +
+      '<p>Peça para a Geovana conferir o seu cadastro.</p>' +
       '<div class="navex"><button class="btn leve" id="bSair">Sair e usar outro e-mail</button>' +
       '<a class="btn" target="_blank" rel="noopener" href="https://wa.me/' + CONFIG.whatsapp + '?text=' + encodeURIComponent('Oi Geovana! Não consigo entrar na área da Mentoria Estrela com o e-mail ' + eu.email) + '">Falar com a Geovana</a></div></div>' + rodape();
     $('#bSair').onclick = sair;
@@ -253,12 +256,9 @@
   });
 
   /* ---------- início ---------- */
-  var erroLink = /error_description=([^&]+)/.exec(location.hash);
   sb.auth.getSession().then(function (r) {
     var s = r.data && r.data.session;
-    if (s) { iniciar(s); return; }
-    if (erroLink) { history.replaceState(null, '', location.pathname); telaLogin('Esse link expirou ou já foi usado. Peça um novo abaixo.'); return; }
-    telaLogin();
+    if (s) iniciar(s); else telaLogin();
   });
   sb.auth.onAuthStateChange(function (ev, s) {
     if (ev === 'SIGNED_IN' && s) iniciar(s);

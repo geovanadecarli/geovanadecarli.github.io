@@ -30,7 +30,9 @@
 (function () {
   var app = $('#app');
   var alunos = [], sessoes = [], exercicios = [], libs = [], respostas = {}, comentarios = {};
-  var vivoTimer = null;
+  var vivoTimer = null, logins = {};
+  var LINK = location.origin + location.pathname.replace(/painel\.html$/, '');
+  var tmp = supabase.createClient(CONFIG.url, CONFIG.chave, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'cadastro-tmp' } });
 
   function toast(t) {
     var d = document.createElement('div'); d.className = 'toast'; d.textContent = t;
@@ -50,26 +52,28 @@
       sb.from('exercicios').select('*').order('sessao').order('ordem'),
       sb.from('liberacoes').select('*'),
       sb.from('respostas').select('*'),
-      sb.from('comentarios').select('*')
+      sb.from('comentarios').select('*'),
+      sb.rpc('admin_logins')
     ]);
     for (var i = 0; i < rs.length; i++) if (rs[i].error) throw rs[i].error;
     alunos = rs[0].data; sessoes = rs[1].data; exercicios = rs[2].data; libs = rs[3].data;
     respostas = {}; rs[4].data.forEach(function (r) { respostas[chave(r.aluno_email, r.exercicio_id)] = r; });
     comentarios = {}; rs[5].data.forEach(function (c) { comentarios[chave(c.aluno_email, c.exercicio_id)] = c; });
+    logins = {}; rs[6].data.forEach(function (l) { logins[l.email] = l; });
   }
 
   /* ---------- login ---------- */
-  function telaLogin(aviso, tipo) {
+  function telaLogin(aviso) {
     $('#abas').hidden = true; $('#bSair').hidden = true;
     app.innerHTML = '<form class="cartao" id="f" style="max-width:420px;margin:30px auto"><h2>Entrar no painel</h2>' +
-      '<p style="margin-bottom:10px">Use o e-mail de administradora. Você recebe um link de acesso.</p>' +
-      '<div class="form-linha"><input type="email" id="email" required autocomplete="email" placeholder="seu e-mail" value="' + esc(lerLocal('me_email') || '') + '"><button class="btn">Receber link</button></div>' +
-      (aviso ? '<div class="aviso ' + (tipo || 'erro') + '">' + aviso + '</div>' : '') + '</form>';
+      '<div style="display:grid;gap:8px"><input class="campo-email" style="margin:0" type="email" id="email" required autocomplete="username" placeholder="seu e-mail" value="' + esc(lerLocal('me_email') || '') + '">' +
+      '<input class="campo-email" style="margin:0" type="password" id="senha" required autocomplete="current-password" placeholder="senha"><button class="btn">Entrar</button></div>' +
+      (aviso ? '<div class="aviso erro">' + aviso + '</div>' : '') + '</form>';
     $('#f').onsubmit = async function (e) {
       e.preventDefault();
       var email = $('#email').value.trim().toLowerCase(); guardarLocal('me_email', email);
-      var r = await sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } });
-      telaLogin(r.error ? esc(msgErro(r.error)) : 'Link enviado para <b>' + esc(email) + '</b>.', r.error ? 'erro' : 'ok');
+      var r = await sb.auth.signInWithPassword({ email: email, password: $('#senha').value });
+      if (r.error) telaLogin(esc(msgErro(r.error))); else iniciar(r.data.session);
     };
   }
 
@@ -89,40 +93,67 @@
 
   function telaAlunos() {
     var h = '<h2>Mentorados <span class="pill cinza" style="font:500 13px Jost">' + alunos.length + '</span></h2>';
-    h += '<form class="cartao" id="fNovo"><h3 style="margin-bottom:8px">Adicionar mentorado</h3>' +
-      '<div class="form-linha"><input id="nNome" placeholder="Nome" required><input id="nEmail" type="email" placeholder="E-mail que ele vai usar para entrar" required><button class="btn">Adicionar</button></div>' +
-      '<p class="miudo" style="margin-top:8px">Vários de uma vez: cole uma pessoa por linha no formato <b>Nome; email</b> e toque em "Adicionar vários".</p>' +
-      '<details style="margin-top:6px"><summary class="miudo" style="cursor:pointer">Adicionar vários</summary><div class="form-linha" style="margin-top:8px"><textarea id="nVarios" rows="4" placeholder="Ana Souza; ana@email.com&#10;Bruno Lima; bruno@email.com"></textarea><button type="button" class="btn ouro" id="bVarios">Adicionar vários</button></div></details>' +
-      '</form>';
+    h += '<form class="cartao" id="fNovo"><h3 style="margin-bottom:8px">Cadastrar mentorado</h3>' +
+      '<div class="form-linha"><input id="nNome" placeholder="Nome" required><input id="nEmail" type="email" placeholder="E-mail" required>' +
+      '<input id="nSenha" placeholder="Senha" required minlength="6" value="' + gerarSenha() + '" style="flex:0 1 170px"><button class="btn">Cadastrar</button></div>' +
+      '<p class="miudo" style="margin-top:8px">A senha já vem sugerida; pode trocar. Depois de cadastrar, aparece a mensagem pronta para mandar no WhatsApp.</p>' +
+      '<div id="msgPronta"></div></form>';
     if (!alunos.length) h += '<p class="miudo">Nenhum mentorado ainda. Adicione acima: só quem estiver nesta lista consegue entrar.</p>';
     h += '<div class="grade-alunos">';
     alunos.forEach(function (a) {
       var r = resumoAluno(a);
       h += '<a class="cartao aluno" href="#aluno=' + encodeURIComponent(a.email) + '"><div class="nome">' + esc(a.nome || '(sem nome)') + '</div><div class="em">' + esc(a.email) + '</div>' +
         '<div class="barrinha"><div style="width:' + (r.lib ? Math.round(r.feitos / r.lib * 100) : 0) + '%"></div></div>' +
-        '<div class="linha-info"><span>' + r.feitos + ' de ' + r.lib + ' respondidos</span><span>' + (r.ultima ? quando(r.ultima) : (a.aceite_privacidade ? 'entrou' : 'ainda não entrou')) + '</span></div></a>';
+        '<div class="linha-info"><span>' + r.feitos + ' de ' + r.lib + ' respondidos</span><span>' + (r.ultima ? quando(r.ultima) : !logins[a.email] ? '⚠ sem login' : (a.aceite_privacidade ? 'entrou' : 'ainda não entrou')) + '</span></div></a>';
     });
     h += '</div>';
     app.innerHTML = h;
 
     $('#fNovo').onsubmit = async function (e) {
       e.preventDefault();
-      await adicionar([{ nome: $('#nNome').value.trim(), email: $('#nEmail').value.trim().toLowerCase() }]);
-    };
-    $('#bVarios').onclick = async function () {
-      var lista = $('#nVarios').value.split('\n').map(function (l) {
-        var p = l.split(/[;,\t]/); if (p.length < 2) return null;
-        return { nome: p[0].trim(), email: p[1].trim().toLowerCase() };
-      }).filter(function (x) { return x && /@/.test(x.email); });
-      if (!lista.length) { toast('Use o formato: Nome; email'); return; }
-      await adicionar(lista);
+      var nome = $('#nNome').value.trim(), email = $('#nEmail').value.trim().toLowerCase(), senha = $('#nSenha').value.trim();
+      var b = $('#fNovo button'); b.disabled = true; b.textContent = 'Cadastrando…';
+      var res = await cadastrar(nome, email, senha);
+      b.disabled = false; b.textContent = 'Cadastrar';
+      if (!res.ok) { toast(res.erro); return; }
+      await carregar(); telaAlunos();
+      mostrarMensagem($('#msgPronta'), nome, email, res.senha);
+      toast('Cadastrado ✓');
     };
   }
-  async function adicionar(lista) {
-    var r = await sb.from('alunos').upsert(lista, { onConflict: 'email' });
-    if (r.error) { toast(msgErro(r.error)); return; }
-    toast(lista.length > 1 ? lista.length + ' mentorados adicionados' : 'Mentorado adicionado');
-    await carregar(); rota();
+
+  async function cadastrar(nome, email, senha) {
+    if (senha.length < 6) return { ok: false, erro: 'A senha precisa ter pelo menos 6 caracteres.' };
+    var r = await sb.from('alunos').upsert({ nome: nome, email: email }, { onConflict: 'email' });
+    if (r.error) return { ok: false, erro: msgErro(r.error) };
+    if (logins[email]) {
+      var t = await sb.rpc('admin_trocar_senha', { p_email: email, p_senha: senha });
+      return t.error ? { ok: false, erro: msgErro(t.error) } : { ok: true, senha: senha };
+    }
+    var su = await tmp.auth.signUp({ email: email, password: senha });
+    if (su.error && /already/i.test(su.error.message)) {
+      var t2 = await sb.rpc('admin_trocar_senha', { p_email: email, p_senha: senha });
+      return t2.error ? { ok: false, erro: msgErro(t2.error) } : { ok: true, senha: senha };
+    }
+    if (su.error) return { ok: false, erro: msgErro(su.error) };
+    if (su.data && !su.data.session) {
+      return { ok: false, erro: 'O Supabase está pedindo confirmação por e-mail. Desligue "Confirm email" em Authentication → Sign In / Providers → Email e cadastre de novo.' };
+    }
+    await tmp.auth.signOut().catch(function () {});
+    return { ok: true, senha: senha };
+  }
+
+  function mostrarMensagem(box, nome, email, senha) {
+    var msg = 'Oi ' + (nome || '').split(' ')[0] + '! ✨ Seu acesso à área da Mentoria Estrela, onde você vai responder os exercícios:\n\n' +
+      LINK + '\n\nE-mail: ' + email + '\nSenha: ' + senha + '\n\nGuarde esta mensagem. As respostas são salvas sozinhas e só eu vejo.';
+    box.innerHTML = '<div class="caixa-com" style="margin-top:12px"><label>Mensagem para ' + esc(nome || email) + '</label>' +
+      '<textarea readonly rows="8">' + esc(msg) + '</textarea>' +
+      '<div class="acoes"><button type="button" class="btn peq leve" data-copiar>Copiar</button>' +
+      '<a class="btn peq ouro" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(msg) + '">Abrir no WhatsApp</a></div></div>';
+    $('[data-copiar]', box).onclick = function () {
+      var ta = $('textarea', box); ta.select();
+      (navigator.clipboard ? navigator.clipboard.writeText(msg) : Promise.reject()).then(function () { toast('Copiado ✓'); }, function () { document.execCommand('copy'); toast('Copiado ✓'); });
+    };
   }
 
   /* ---------- um mentorado ---------- */
@@ -131,7 +162,7 @@
     if (!a) { location.hash = ''; return; }
     var h = '<p><a href="#" class="miudo">← todos os mentorados</a></p>' +
       '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0">' + esc(a.nome || a.email) + '</h2><span class="vivo">atualiza sozinho</span></div>' +
-      '<p class="miudo" style="margin-bottom:16px">' + esc(a.email) + (a.aceite_privacidade ? ' · aceitou a privacidade em ' + new Date(a.aceite_privacidade).toLocaleDateString('pt-BR') : ' · ainda não entrou') + '</p>';
+      '<p class="miudo" style="margin-bottom:16px">' + esc(a.email) + (!logins[a.email] ? ' · ⚠ ainda sem login: crie no fim da página' : logins[a.email].ultimo_acesso ? ' · último acesso ' + quando(logins[a.email].ultimo_acesso) : ' · ainda não entrou') + '</p>';
     if (!exercicios.length) h += '<p class="miudo">Nenhum exercício cadastrado ainda.</p>';
     sessoes.forEach(function (s) {
       var exs = exercicios.filter(function (e) { return e.sessao === s.numero; });
@@ -142,7 +173,8 @@
     });
     h += '<details class="cartao" style="margin-top:30px"><summary class="miudo" style="cursor:pointer">Editar ou remover mentorado</summary>' +
       '<div class="form-linha" style="margin-top:10px"><input id="eNome" value="' + esc(a.nome) + '"><button class="btn peq" id="bNome">Salvar nome</button></div>' +
-      '<p class="miudo" style="margin:12px 0 6px">Remover apaga também todas as respostas e comentários deste mentorado (pedido de exclusão LGPD).</p>' +
+      '<div class="form-linha" style="margin-top:10px"><input id="eSenha" value="' + gerarSenha() + '"><button class="btn peq ouro" id="bSenha">' + (logins[a.email] ? 'Definir nova senha' : 'Criar login com esta senha') + '</button></div><div id="msgSenha"></div>' +
+      '<p class="miudo" style="margin:12px 0 6px">Remover apaga também todas as respostas e comentários deste mentorado (pedido de exclusão LGPD). O login em si fica no Supabase → Authentication → Users.</p>' +
       '<button class="btn leve peq" id="bRemover" style="color:#A3283A;border-color:#E9B8BF">Remover ' + esc(a.nome || a.email) + '</button></details>';
     var abertos = $$('details.ex[open]').map(function (d) { return d.getAttribute('data-ex'); });
     app.innerHTML = h;
@@ -189,6 +221,15 @@
       var r = await sb.from('alunos').update({ nome: $('#eNome').value.trim() }).eq('email', a.email);
       if (r.error) { toast(msgErro(r.error)); return; }
       a.nome = $('#eNome').value.trim(); toast('Nome salvo'); telaAluno(a.email);
+    };
+    $('#bSenha').onclick = async function () {
+      var senha = $('#eSenha').value.trim(), b = this; b.disabled = true;
+      var res = await cadastrar(a.nome, a.email, senha);
+      b.disabled = false;
+      if (!res.ok) { toast(res.erro); return; }
+      await carregar();
+      mostrarMensagem($('#msgSenha'), a.nome, a.email, senha);
+      toast('Senha definida ✓');
     };
     $('#bRemover').onclick = async function () {
       if (!confirm('Remover ' + (a.nome || a.email) + ' e apagar todas as respostas? Isso não pode ser desfeito.')) return;
@@ -299,7 +340,7 @@
     if (iniciado) return; iniciado = true;
     if (/access_token|refresh_token/.test(location.hash)) history.replaceState(null, '', location.pathname);
     $('#bSair').hidden = false;
-    $('#bSair').onclick = async function () { await sb.auth.signOut(); iniciado = false; telaLogin(); };
+    $('#bSair').onclick = async function () { await sb.auth.signOut(); iniciado = false; location.hash = ''; telaLogin(); };
     var a = await sb.rpc('eh_admin');
     if (!a.data) {
       app.innerHTML = '<div class="cartao" style="max-width:460px;margin:30px auto"><h2>Sem acesso ao painel</h2><p>Você entrou como <b>' + esc(s.user.email) + '</b>, que não é administradora. <a href="./">Ir para a área do mentorado</a>.</p></div>';

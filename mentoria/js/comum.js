@@ -10,8 +10,15 @@ var CONFIG = {
 };
 
 var sb = supabase.createClient(CONFIG.url, CONFIG.chave, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' }
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
 });
+
+/* senha fácil de ditar: estrela-4821 */
+function gerarSenha() {
+  var p = ['estrela', 'tela', 'pincel', 'cor', 'arte', 'luz', 'brilho', 'aquarela'];
+  var n = new Uint32Array(2); (window.crypto || window.msCrypto).getRandomValues(n);
+  return p[n[0] % p.length] + '-' + (1000 + n[1] % 9000);
+}
 
 function esc(t) {
   return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
@@ -146,7 +153,9 @@ function apagarLocal(chave) { try { localStorage.removeItem(chave); } catch (e) 
 
 function msgErro(err) {
   var m = (err && (err.message || err.error_description)) || String(err || '');
-  if (/rate limit|429|too many|security purposes/i.test(m)) return 'Muitos pedidos de link em pouco tempo. Espere alguns minutos e tente de novo.';
+  if (/invalid login credentials/i.test(m)) return 'E-mail ou senha não conferem. Confira e tente de novo.';
+  if (/rate limit|429|too many|security purposes/i.test(m)) return 'Muitas tentativas em pouco tempo. Espere alguns minutos e tente de novo.';
+  if (/already registered|already been registered/i.test(m)) return 'Esse e-mail já tem login.';
   if (/fetch|network/i.test(m)) return 'Sem conexão com a internet. Confira o Wi-Fi ou os dados móveis.';
   if (/JWT|expired/i.test(m)) return 'Seu acesso expirou. Entre de novo com o seu e-mail.';
   return 'Algo deu errado: ' + m;

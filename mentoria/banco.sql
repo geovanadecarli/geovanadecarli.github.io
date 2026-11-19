@@ -94,12 +94,30 @@ language sql security definer set search_path = public as $$
   where email = meu_email() and aceite_privacidade is null
 $$;
 
+-- Você define uma nova senha para um mentorado (só administradora)
+create or replace function admin_trocar_senha(p_email text, p_senha text) returns void
+language plpgsql security definer set search_path = public, extensions, auth as $$
+begin
+  if not eh_admin() then raise exception 'Sem permissão'; end if;
+  if length(coalesce(p_senha, '')) < 6 then raise exception 'A senha precisa ter pelo menos 6 caracteres'; end if;
+  update auth.users
+     set encrypted_password = extensions.crypt(p_senha, extensions.gen_salt('bf')), updated_at = now()
+   where lower(email) = lower(p_email);
+  if not found then raise exception 'Esse e-mail ainda não tem login criado'; end if;
+end $$;
+
+-- Mostra no painel quais mentorados já têm login criado
+create or replace function admin_logins() returns table (email text, ultimo_acesso timestamptz)
+language sql stable security definer set search_path = public, auth as $$
+  select lower(u.email)::text, u.last_sign_in_at from auth.users u where eh_admin()
+$$;
+
 -- ---------- permissões ----------
 revoke all on admins, alunos, sessoes, exercicios, liberacoes, respostas, comentarios from anon;
 grant select, insert, update, delete
   on admins, alunos, sessoes, exercicios, liberacoes, respostas, comentarios to authenticated;
-grant execute on function meu_email(), eh_admin(), eh_aluno(), liberado(text), aceitar_privacidade() to authenticated;
-revoke execute on function eh_admin(), eh_aluno(), liberado(text), aceitar_privacidade() from anon, public;
+revoke execute on function eh_admin(), eh_aluno(), liberado(text), aceitar_privacidade(), admin_trocar_senha(text, text), admin_logins() from anon, public;
+grant execute on function meu_email(), eh_admin(), eh_aluno(), liberado(text), aceitar_privacidade(), admin_trocar_senha(text, text), admin_logins() to authenticated;
 
 alter table admins      enable row level security;
 alter table alunos      enable row level security;
