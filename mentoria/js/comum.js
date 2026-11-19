@@ -50,6 +50,7 @@ function quando(iso) {
    marcar     { id, tipo:'marcar', rotulo, opcoes:[...] }  várias opções
    escolha    { id, tipo:'escolha', rotulo, opcoes:[...] } uma opção
    lista      { id, tipo:'lista', rotulo, linhas:5 }     itens numerados
+   foto       { id, tipo:'foto', rotulo, max:3 }          envio de fotos
 -------------------------------------------------------------------- */
 function camposRespondiveis(conteudo) {
   return ((conteudo && conteudo.campos) || []).filter(function (c) { return c.tipo !== 'info' && c.id; });
@@ -60,6 +61,7 @@ function preenchido(v) {
   return String(v).trim() !== '';
 }
 function progresso(conteudo, dados) {
+  if (conteudo && conteudo.componente === 'maas') return { feitos: dados && dados.concluido_em ? 1 : 0, total: 1 };
   var cs = camposRespondiveis(conteudo), n = 0;
   dados = dados || {};
   cs.forEach(function (c) { if (preenchido(dados[c.id])) n++; });
@@ -101,6 +103,11 @@ function htmlCampos(conteudo, dados, leitura) {
         h += '<label class="op"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + nome + '" value="' + esc(o) + '"' + (on ? ' checked' : '') + '><span>' + esc(o) + '</span></label>';
       });
       h += '</div>';
+    } else if (c.tipo === 'foto') {
+      var fotos = Array.isArray(v) ? v : [];
+      h += '<div class="fotos-campo" data-max="' + (c.max || 3) + '" data-paths="' + esc(JSON.stringify(fotos)) + '"><div class="miniaturas"></div>' +
+        (leitura ? (fotos.length ? '' : '<div class="resposta vazio">nenhuma foto ainda</div>')
+                 : '<label class="btn leve peq enviar-foto"><input type="file" accept="image/*" hidden><span> Enviar foto</span></label>') + '</div>';
     } else if (c.tipo === 'lista') {
       var linhas = c.linhas || 5, arr = Array.isArray(v) ? v : [];
       h += '<ol class="lista">';
@@ -129,14 +136,15 @@ function lerCampos(raiz) {
     else if (tipo === 'marcar') dados[id] = $$('input:checked', q).map(function (i) { return i.value; });
     else if (tipo === 'escolha') { var r = $('input:checked', q); dados[id] = r ? r.value : null; }
     else if (tipo === 'lista') dados[id] = $$('input', q).map(function (i) { return i.value; });
+    else if (tipo === 'foto') dados[id] = JSON.parse($('.fotos-campo', q).getAttribute('data-paths') || '[]');
   });
   return dados;
 }
 
 /* Liga os cliques e digitação; chama aoMudar() a cada mudança */
 function ligarCampos(raiz, aoMudar) {
-  raiz.addEventListener('input', aoMudar);
-  raiz.addEventListener('change', aoMudar);
+  raiz.addEventListener('input', function (e) { if (e.target.type !== 'file') aoMudar(); });
+  raiz.addEventListener('change', function (e) { if (e.target.type !== 'file') aoMudar(); });
   raiz.addEventListener('click', function (e) {
     var b = e.target.closest('.escala button');
     if (!b) return;
@@ -159,4 +167,63 @@ function msgErro(err) {
   if (/fetch|network/i.test(m)) return 'Sem conexão com a internet. Confira o Wi-Fi ou os dados móveis.';
   if (/JWT|expired/i.test(m)) return 'Seu acesso expirou. Entre de novo com o seu e-mail.';
   return 'Algo deu errado: ' + m;
+}
+
+/* ---------- fotos ---------- */
+async function prepararFotos(raiz, ctx) {
+  var campos = $$('.fotos-campo', raiz);
+  for (var i = 0; i < campos.length; i++) await desenharFotos(campos[i], ctx);
+  campos.forEach(function (fc) {
+    var inp = $('input[type=file]', fc);
+    if (!inp) return;
+    inp.onchange = async function () {
+      var f = inp.files[0]; inp.value = '';
+      if (!f) return;
+      var paths = JSON.parse(fc.getAttribute('data-paths') || '[]');
+      if (paths.length >= Number(fc.getAttribute('data-max'))) { alert('Limite de fotos neste campo. Apague uma para enviar outra.'); return; }
+      var lab = $('.enviar-foto', fc), sp = $('span', lab); lab.classList.add('enviando'); sp.textContent = ' Enviando…';
+      try {
+        var blob = await reduzirImagem(f);
+        var nome = ctx.email + '/' + ctx.exId + '/' + Date.now() + '.jpg';
+        var r = await sb.storage.from('fotos').upload(nome, blob, { contentType: blob.type || 'image/jpeg', upsert: false });
+        if (r.error) throw r.error;
+        paths.push(nome); fc.setAttribute('data-paths', JSON.stringify(paths));
+        await desenharFotos(fc, ctx); if (ctx.aoMudar) ctx.aoMudar();
+      } catch (e) { alert('A foto não foi enviada. ' + msgErro(e)); }
+      lab.classList.remove('enviando'); sp.textContent = ' Enviar foto';
+    };
+  });
+}
+async function desenharFotos(fc, ctx) {
+  var paths = JSON.parse(fc.getAttribute('data-paths') || '[]'), box = $('.miniaturas', fc);
+  if (!paths.length) { box.innerHTML = ''; return; }
+  var r = await sb.storage.from('fotos').createSignedUrls(paths, 3600);
+  var urls = (r.data || []).map(function (x) { return x.signedUrl; });
+  box.innerHTML = paths.map(function (p, i) {
+    return '<div class="mini"><a href="' + esc(urls[i] || '#') + '" target="_blank" rel="noopener"><img src="' + esc(urls[i] || '') + '" alt="Foto enviada"></a>' +
+      (ctx.leitura ? '' : '<button type="button" class="apagar-foto" data-i="' + i + '" aria-label="Apagar foto">×</button>') + '</div>';
+  }).join('');
+  $$('.apagar-foto', box).forEach(function (b) {
+    b.onclick = async function () {
+      if (!confirm('Apagar esta foto?')) return;
+      var i = Number(b.getAttribute('data-i'));
+      await sb.storage.from('fotos').remove([paths[i]]);
+      paths.splice(i, 1); fc.setAttribute('data-paths', JSON.stringify(paths));
+      await desenharFotos(fc, ctx); if (ctx.aoMudar) ctx.aoMudar();
+    };
+  });
+}
+function reduzirImagem(f) {
+  return new Promise(function (ok) {
+    var img = new Image(), url = URL.createObjectURL(f);
+    img.onload = function () {
+      var m = 1600, w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, m / Math.max(w, h));
+      var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(function (b) { ok(b || f); }, 'image/jpeg', 0.82);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); ok(f); };
+    img.src = url;
+  });
 }

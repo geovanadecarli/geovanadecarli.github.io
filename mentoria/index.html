@@ -4,28 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mentoria Estrela · Geovana De Carli</title>
-<meta name="description" content="Área dos mentorados da Mentoria Estrela.">
+<meta name="description" content="Área dos participantes da Mentoria Estrela.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#2A1640">
 <link rel="icon" href="logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Cormorant+Garamond:wght@600&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500&family=Jost:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body class="ceu">
-<main id="app" aria-live="polite">
+<main id="app">
   <div class="cabeca"><img src="logo.jpg" alt=""><h1>Mentoria Estrela</h1><div class="sub">carregando…</div></div>
 </main>
 
 <script src="js/supabase-2.45.4.js"></script>
 <script src="js/comum.js"></script>
+<script src="js/maas.js"></script>
 <script>
 (function () {
   var app = $('#app');
   var eu = null, aluno = null, admin = false;
   var sessoes = [], exercicios = [], respostas = {}, comentarios = {};
-  var salvarTimer = null, pollTimer = null, exAtual = null;
+  var salvarTimer = null, pollTimer = null, exAtual = null, maasCtl = null, trilhaTimer = null;
 
   function cabeca(sub) {
     return '<div class="cabeca sobe"><img src="logo.jpg" alt="Logo da Mentoria Estrela"><h1>Mentoria Estrela</h1><div class="sub">' + esc(sub) + '</div></div>';
@@ -68,6 +69,15 @@
       '<p>Peça para a Geovana conferir o seu cadastro.</p>' +
       '<div class="navex"><button class="btn leve" id="bSair">Sair e usar outro e-mail</button>' +
       '<a class="btn" target="_blank" rel="noopener" href="https://wa.me/' + CONFIG.whatsapp + '?text=' + encodeURIComponent('Oi Geovana! Não consigo entrar na área da Mentoria Estrela com o e-mail ' + eu.email) + '">Falar com a Geovana</a></div></div>' + rodape();
+    $('#bSair').onclick = sair;
+  }
+
+  function telaEncerrado() {
+    app.innerHTML = cabeca('até breve') +
+      '<div class="caixa sobe"><h2>O seu acesso desta turma terminou</h2>' +
+      '<p>A sua jornada nesta turma da Mentoria Estrela chegou ao fim. Para continuar ou renovar, fale com a Geovana.</p>' +
+      '<div class="navex"><button class="btn leve" id="bSair">Sair</button>' +
+      '<a class="btn" target="_blank" rel="noopener" href="https://wa.me/' + CONFIG.whatsapp + '?text=' + encodeURIComponent('Oi Geovana! Quero renovar a Mentoria Estrela.') + '">Falar com a Geovana</a></div></div>' + rodape();
     $('#bSair').onclick = sair;
   }
 
@@ -116,6 +126,8 @@
       var a = await sb.rpc('eh_admin'); admin = !!a.data;
       if (!aluno && admin) { location.href = 'painel.html'; return; }
       if (!aluno) { telaSemAcesso(); return; }
+      var v = await sb.rpc('eh_aluno');
+      if (!v.data) { telaEncerrado(); return; }
       if (!aluno.aceite_privacidade) { telaAceite(); return; }
       await carregar();
       rota();
@@ -129,12 +141,20 @@
   function estadoEx(ex) {
     var p = progresso(ex.conteudo, respostas[ex.id] && respostas[ex.id].dados);
     if (p.total && p.feitos >= p.total) return '<span class="estado feito">feito ✓</span>';
-    if (p.feitos > 0) return '<span class="estado">continuar →</span>';
+    if (p.feitos > 0 || respostas[ex.id]) return '<span class="estado">continuar →</span>';
     return '<span class="estado comecar">começar</span>';
   }
 
   function telaTrilha() {
-    exAtual = null; pararPoll();
+    exAtual = null; maasCtl = null; pararPoll(); app.classList.remove('largo');
+    /* durante a aula: o que a Geovana liberar aparece sozinho */
+    clearInterval(trilhaTimer);
+    trilhaTimer = setInterval(async function () {
+      if (document.hidden || exAtual) return;
+      var antes = exercicios.map(function (e) { return e.id; }).join();
+      try { await carregar(); } catch (e) { return; }
+      if (!exAtual && exercicios.map(function (e) { return e.id; }).join() !== antes) telaTrilha();
+    }, 12000);
     var porSessao = {};
     exercicios.forEach(function (e) { (porSessao[e.sessao] = porSessao[e.sessao] || []).push(e); });
     var h = '<div class="barra-topo"><span>' + esc(eu.email) + '</span><span>' +
@@ -167,7 +187,8 @@
   function telaExercicio(id) {
     var ex = exercicios.filter(function (e) { return e.id === id; })[0];
     if (!ex) { location.hash = ''; return; }
-    exAtual = ex;
+    exAtual = ex; clearInterval(trilhaTimer);
+    if (ex.conteudo && ex.conteudo.componente === 'maas') { telaMaas(ex); return; }
     var s = sessoes.filter(function (x) { return x.numero === ex.sessao; })[0] || { numero: ex.sessao, titulo: '' };
     var salvoServidor = respostas[id] ? respostas[id].dados : {};
     var rascunho = lerLocal('rasc_' + eu.email + '_' + id);
@@ -193,7 +214,7 @@
     window.scrollTo(0, 0);
 
     var form = $('#fEx');
-    ligarCampos(form, function () {
+    function aoMudar() {
       var d = lerCampos(form);
       guardarLocal('rasc_' + eu.email + '_' + id, { dados: d, em: Date.now() });
       var pr = progresso(ex.conteudo, d);
@@ -201,8 +222,27 @@
       $('#salvo').className = 'salvo'; $('#salvo').textContent = '…';
       clearTimeout(salvarTimer);
       salvarTimer = setTimeout(function () { salvar(ex, d); }, 900);
-    });
+    }
+    ligarCampos(form, aoMudar);
+    prepararFotos(form, { email: eu.email, exId: id, aoMudar: aoMudar });
     if (pendente) salvar(ex, dados);
+    iniciarPoll();
+  }
+
+  function telaMaas(ex) {
+    var id = ex.id, rasc = lerLocal('rasc_' + eu.email + '_' + id), dados = respostas[id] ? respostas[id].dados : null, pendente = false;
+    if (rasc && (!respostas[id] || rasc.em > Date.parse(respostas[id].atualizado_em))) { dados = rasc.dados; pendente = true; }
+    app.classList.add('largo');
+    app.innerHTML = '<div id="maasRaiz"></div><div id="com"></div>' + rodape();
+    maasCtl = MAAS.montar($('#maasRaiz'), ex, dados, {
+      aoDigitar: function () {
+        guardarLocal('rasc_' + eu.email + '_' + id, { dados: maasCtl ? maasCtl.dados() : dados, em: Date.now() });
+        var el = $('#salvo'); if (el) { el.className = 'maas-status'; el.textContent = 'salvando…'; }
+      },
+      salvar: function (d) { salvar(ex, d); }
+    });
+    mostrarComentario();
+    if (pendente) salvar(ex, maasCtl.dados());
     iniciarPoll();
   }
 
@@ -218,7 +258,7 @@
     }
     respostas[ex.id] = { exercicio_id: ex.id, dados: d, atualizado_em: agora };
     apagarLocal('rasc_' + eu.email + '_' + ex.id);
-    if (el && exAtual === ex) { el.className = 'salvo'; el.textContent = 'salvo ✓'; }
+    if (el && exAtual === ex) { el.className = maasCtl ? 'maas-status' : 'salvo'; el.textContent = maasCtl ? 'salvo automaticamente ✓' : 'salvo ✓'; }
   }
 
   function mostrarComentario() {
@@ -248,6 +288,7 @@
   }
   window.addEventListener('hashchange', function () {
     if (salvarTimer && exAtual) { clearTimeout(salvarTimer); var f = $('#fEx'); if (f) salvar(exAtual, lerCampos(f)); }
+    if (maasCtl && exAtual) salvar(exAtual, maasCtl.dados());
     rota();
   });
   /* recarrega ao voltar para a aba (a Geovana pode ter liberado algo novo) */

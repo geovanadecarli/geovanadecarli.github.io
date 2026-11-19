@@ -9,28 +9,48 @@
 <link rel="icon" href="logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:wght@600&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:wght@500;600&family=Jost:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="estilo.css">
+<style>
+.seletor-turma{background:transparent;border:1px solid #6E5590;color:var(--lilas-claro);border-radius:20px;padding:6px 10px;font-size:14px}
+.seletor-turma option{color:#222}
+.vivo-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:10px 0 24px}
+.vivo-card{background:var(--papel);border:1px solid var(--linha);border-radius:14px;padding:12px;text-decoration:none;display:block}
+.vivo-card:hover{border-color:var(--rosa)}
+.vivo-card .nome{font-weight:500}
+.vivo-card .st{font-size:12px;color:var(--suave)}
+.vivo-card svg{width:100%;max-width:190px;display:block;margin:6px auto 0}
+.vivo-card .res{font-size:13px;margin-top:6px;max-height:160px;overflow:hidden;color:var(--tinta)}
+.vivo-ex{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.vivo-ex h3{flex:1}
+.sel-sessao{padding:9px 12px;border:1px solid var(--linha);border-radius:12px;background:#fff;font-size:15px}
+.anot textarea{width:100%;min-height:120px;border:1px solid #D8C9E8;border-radius:10px;padding:10px;font-size:15px;background:#FCFAFF}
+.anot{background:#F1EAF8;border-radius:14px;padding:12px 14px;margin:14px 0}
+.anot label{font:500 22px/1 Caveat,cursive;color:var(--roxo);display:block;margin-bottom:6px}
+</style>
 </head>
 <body class="atelie">
 <header class="topo-painel">
   <img src="logo.jpg" alt="">
   <div><b>Mentoria Estrela</b><span>painel da Geovana</span></div>
-  <div class="dir"><a href="./">área do mentorado</a><button class="link" id="bSair" hidden>sair</button></div>
+  <div class="dir"><select class="seletor-turma" id="selTurma" hidden aria-label="Turma"></select><button class="link" id="bSair" hidden>sair</button></div>
 </header>
 <nav class="abas" id="abas" hidden>
-  <a href="#" data-aba="alunos">Mentorados</a>
-  <a href="#liberar" data-aba="liberar">Liberar exercícios</a>
+  <a href="#aovivo" data-aba="aovivo">Aula ao vivo</a>
+  <a href="#" data-aba="alunos">Participantes</a>
+  <a href="#liberar" data-aba="liberar">Liberar</a>
+  <a href="#turmas" data-aba="turmas">Turmas</a>
 </nav>
 <main id="app"><p class="miudo">Carregando…</p></main>
 
 <script src="js/supabase-2.45.4.js"></script>
 <script src="js/comum.js"></script>
+<script src="js/maas.js"></script>
 <script>
 (function () {
   var app = $('#app');
-  var alunos = [], sessoes = [], exercicios = [], libs = [], respostas = {}, comentarios = {};
-  var vivoTimer = null, logins = {};
+  var turmas = [], alunos = [], sessoes = [], exercicios = [], libs = [], respostas = {}, comentarios = {}, anotacoes = {}, logins = {};
+  var turmaId = null, vivoTimer = null, sessaoVivo = null;
   var LINK = location.origin + location.pathname.replace(/painel\.html$/, '');
   var tmp = supabase.createClient(CONFIG.url, CONFIG.chave, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'cadastro-tmp' } });
 
@@ -39,32 +59,56 @@
     document.body.appendChild(d); setTimeout(function () { d.remove(); }, 2600);
   }
   function chave(email, ex) { return email + '|' + ex; }
-  function liberadoPara(exId, email) {
-    return libs.some(function (l) { return l.exercicio_id === exId && (l.aluno_email === null || l.aluno_email === email); });
-  }
-  function libTurma(exId) { return libs.some(function (l) { return l.exercicio_id === exId && l.aluno_email === null; }); }
+  function turma() { return turmas.filter(function (t) { return t.id === turmaId; })[0]; }
+  function daTurma() { return alunos.filter(function (a) { return a.turma_id === turmaId; }); }
+  function libTurma(exId, tId) { return libs.some(function (l) { return l.exercicio_id === exId && !l.aluno_email && l.turma_id === tId; }); }
   function libIndividual(exId, email) { return libs.some(function (l) { return l.exercicio_id === exId && l.aluno_email === email; }); }
+  function liberadoPara(exId, a) { return libIndividual(exId, a.email) || libTurma(exId, a.turma_id); }
+  function dataBR(d) { return d ? new Date(d + (d.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR') : ''; }
+  function acessoAte(a) { var t = turmas.filter(function (x) { return x.id === a.turma_id; })[0]; return a.acesso_ate || (t && t.fim); }
+  function hojeISO() { var d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+  function maisMeses(iso, m) { var d = new Date(iso + 'T12:00:00'); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10); }
 
   async function carregar() {
     var rs = await Promise.all([
+      sb.from('turmas').select('*').order('id'),
       sb.from('alunos').select('*').order('nome'),
       sb.from('sessoes').select('*').order('numero'),
       sb.from('exercicios').select('*').order('sessao').order('ordem'),
       sb.from('liberacoes').select('*'),
       sb.from('respostas').select('*'),
       sb.from('comentarios').select('*'),
+      sb.from('anotacoes').select('*'),
       sb.rpc('admin_logins')
     ]);
     for (var i = 0; i < rs.length; i++) if (rs[i].error) throw rs[i].error;
-    alunos = rs[0].data; sessoes = rs[1].data; exercicios = rs[2].data; libs = rs[3].data;
-    respostas = {}; rs[4].data.forEach(function (r) { respostas[chave(r.aluno_email, r.exercicio_id)] = r; });
-    comentarios = {}; rs[5].data.forEach(function (c) { comentarios[chave(c.aluno_email, c.exercicio_id)] = c; });
-    logins = {}; rs[6].data.forEach(function (l) { logins[l.email] = l; });
+    turmas = rs[0].data; alunos = rs[1].data; sessoes = rs[2].data; exercicios = rs[3].data; libs = rs[4].data;
+    respostas = {}; rs[5].data.forEach(function (r) { respostas[chave(r.aluno_email, r.exercicio_id)] = r; });
+    comentarios = {}; rs[6].data.forEach(function (c) { comentarios[chave(c.aluno_email, c.exercicio_id)] = c; });
+    anotacoes = {}; rs[7].data.forEach(function (n) { anotacoes[n.aluno_email] = n; });
+    logins = {}; rs[8].data.forEach(function (l) { logins[l.email] = l; });
+    if (!turmas.some(function (t) { return t.id === turmaId; })) {
+      var guard = lerLocal('turma_atual');
+      turmaId = turmas.some(function (t) { return t.id === guard; }) ? guard : (turmas.length ? turmas[turmas.length - 1].id : null);
+    }
+    var sel = $('#selTurma');
+    sel.innerHTML = turmas.map(function (t) { return '<option value="' + t.id + '"' + (t.id === turmaId ? ' selected' : '') + '>' + esc(t.nome) + '</option>'; }).join('');
+    sel.hidden = !turmas.length;
+  }
+  async function recarregarRespostas() {
+    var r = await sb.from('respostas').select('*');
+    if (r.error) return false;
+    var mudou = false;
+    r.data.forEach(function (x) {
+      var k = chave(x.aluno_email, x.exercicio_id);
+      if (!respostas[k] || respostas[k].atualizado_em !== x.atualizado_em) { respostas[k] = x; mudou = true; }
+    });
+    return mudou;
   }
 
   /* ---------- login ---------- */
   function telaLogin(aviso) {
-    $('#abas').hidden = true; $('#bSair').hidden = true;
+    $('#abas').hidden = true; $('#bSair').hidden = true; $('#selTurma').hidden = true;
     app.innerHTML = '<form class="cartao" id="f" style="max-width:420px;margin:30px auto"><h2>Entrar no painel</h2>' +
       '<div style="display:grid;gap:8px"><input class="campo-email" style="margin:0" type="email" id="email" required autocomplete="username" placeholder="seu e-mail" value="' + esc(lerLocal('me_email') || '') + '">' +
       '<input class="campo-email" style="margin:0" type="password" id="senha" required autocomplete="current-password" placeholder="senha"><button class="btn">Entrar</button></div>' +
@@ -77,9 +121,86 @@
     };
   }
 
-  /* ---------- mentorados ---------- */
+  /* ---------- resumo de exercício (compacto) ---------- */
+  function ehMaas(e) { return e.conteudo && e.conteudo.componente === 'maas'; }
+  function statusEx(a, e) {
+    var r = respostas[chave(a.email, e.id)];
+    if (!liberadoPara(e.id, a)) return '<span class="pill cinza">não liberado</span>';
+    if (ehMaas(e)) {
+      if (!r) return '<span class="pill ouro">não iniciada</span>';
+      return r.dados.concluido_em ? '<span class="pill verde">concluída</span>' : '<span class="pill">em andamento</span>';
+    }
+    var p = progresso(e.conteudo, r && r.dados);
+    return (p.total && p.feitos >= p.total) ? '<span class="pill verde">respondido</span>' : p.feitos ? '<span class="pill">' + p.feitos + ' de ' + p.total + '</span>' : '<span class="pill ouro">liberado</span>';
+  }
+
+  /* ---------- AULA AO VIVO ---------- */
+  function telaVivo() {
+    var t = turma();
+    if (!t) { app.innerHTML = '<p class="miudo">Crie uma turma primeiro (aba Turmas).</p>'; return; }
+    var comEx = sessoes.filter(function (s) { return exercicios.some(function (e) { return e.sessao === s.numero; }); });
+    if (!comEx.length) { app.innerHTML = '<h2>Aula ao vivo</h2><p class="miudo">Nenhum exercício cadastrado ainda.</p>'; return; }
+    if (!sessaoVivo || !comEx.some(function (s) { return s.numero === sessaoVivo; })) {
+      var aberta = comEx.filter(function (s) { return exercicios.some(function (e) { return e.sessao === s.numero && libTurma(e.id, turmaId); }); });
+      sessaoVivo = (aberta.length ? aberta[aberta.length - 1] : comEx[0]).numero;
+    }
+    var h = '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Aula ao vivo · ' + esc(t.nome) + '</h2><span class="vivo">atualiza sozinho</span>' +
+      '<select class="sel-sessao" id="selSessao" style="margin-left:auto">' + comEx.map(function (s) { return '<option value="' + s.numero + '"' + (s.numero === sessaoVivo ? ' selected' : '') + '>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</option>'; }).join('') + '</select></div>';
+    h += '<div id="vivoCorpo">' + corpoVivo() + '</div>';
+    app.innerHTML = h;
+    $('#selSessao').onchange = function () { sessaoVivo = Number(this.value); telaVivo(); };
+    ligarVivo();
+    clearInterval(vivoTimer);
+    vivoTimer = setInterval(async function () {
+      if (document.hidden || !$('#vivoCorpo')) return;
+      if (await recarregarRespostas()) { $('#vivoCorpo').innerHTML = corpoVivo(); ligarVivo(); }
+    }, 6000);
+  }
+  function corpoVivo() {
+    var gente = daTurma(), h = '';
+    if (!gente.length) return '<p class="miudo" style="margin-top:12px">Nenhum participante nesta turma ainda.</p>';
+    exercicios.filter(function (e) { return e.sessao === sessaoVivo; }).forEach(function (e) {
+      var lib = libTurma(e.id, turmaId);
+      h += '<div class="vivo-ex"><h3>' + esc(e.titulo) + ' <span class="miudo">· ' + esc(e.tipo) + '</span></h3>' +
+        '<button class="btn peq ' + (lib ? 'leve' : '') + '" data-libvivo="' + esc(e.id) + '" data-on="' + (lib ? 0 : 1) + '">' + (lib ? '✓ liberado · bloquear' : 'Liberar para a turma') + '</button></div>';
+      h += '<div class="vivo-grade">';
+      gente.forEach(function (a) {
+        var r = respostas[chave(a.email, e.id)], corpo = '';
+        if (ehMaas(e) && r) {
+          var d = MAAS.completar(e.conteudo, JSON.parse(JSON.stringify(r.dados))), NP = e.conteudo.pilares.length, ps = d.passo || 0;
+          corpo = MAAS.radar(d.notas, { tamanho: 200, mini: true, destaque: ps >= 2 && ps < 2 + NP ? ps - 2 : undefined }) +
+            '<div class="st" style="text-align:center">' + (d.concluido_em ? 'concluída' : ps < 2 ? 'na abertura' : ps < 2 + NP ? 'pilar ' + (ps - 1) + ' de ' + NP + ' · ' + esc(e.conteudo.pilares[ps - 2].nome) : 'leitura da roda') + '</div>';
+        } else if (r) {
+          corpo = '<div class="res">' + camposResumo(e, r.dados) + '</div>';
+        }
+        h += '<a class="vivo-card" href="#p=' + encodeURIComponent(a.email) + '"><div class="nome">' + esc(a.nome || a.email) + '</div>' +
+          '<div class="st">' + statusEx(a, e) + (r ? ' · ' + quando(r.atualizado_em) : '') + '</div>' + corpo + '</a>';
+      });
+      h += '</div>';
+    });
+    return h;
+  }
+  function camposResumo(e, dados) {
+    return camposRespondiveis(e.conteudo).map(function (c) {
+      var v = dados[c.id];
+      if (!preenchido(v)) return '';
+      if (c.tipo === 'foto') v = (v.length || 0) + ' foto(s)';
+      return '<p><b>' + esc(c.rotulo) + '</b><br>' + esc(Array.isArray(v) ? v.filter(preenchido).join(', ') : v) + '</p>';
+    }).join('') || '<span class="vazio">começou a responder</span>';
+  }
+  function ligarVivo() {
+    $$('[data-libvivo]').forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true;
+        await alternarTurma(b.getAttribute('data-libvivo'), b.getAttribute('data-on') === '1');
+        $('#vivoCorpo').innerHTML = corpoVivo(); ligarVivo();
+      };
+    });
+  }
+
+  /* ---------- PARTICIPANTES ---------- */
   function resumoAluno(a) {
-    var lib = exercicios.filter(function (e) { return liberadoPara(e.id, a.email); });
+    var lib = exercicios.filter(function (e) { return liberadoPara(e.id, a); });
     var feitos = 0, ultima = null;
     lib.forEach(function (e) {
       var r = respostas[chave(a.email, e.id)];
@@ -90,79 +211,81 @@
     });
     return { lib: lib.length, feitos: feitos, ultima: ultima };
   }
-
   function telaAlunos() {
-    var h = '<h2>Mentorados <span class="pill cinza" style="font:500 13px Jost">' + alunos.length + '</span></h2>';
-    h += '<form class="cartao" id="fNovo"><h3 style="margin-bottom:8px">Cadastrar mentorado</h3>' +
+    var t = turma(), gente = daTurma();
+    var h = '<h2>Participantes · ' + esc(t ? t.nome : '') + ' <span class="pill cinza" style="font:500 13px Jost">' + gente.length + '</span></h2>';
+    h += '<form class="cartao" id="fNovo"><h3 style="margin-bottom:8px">Cadastrar participante</h3>' +
       '<div class="form-linha"><input id="nNome" placeholder="Nome" required><input id="nEmail" type="email" placeholder="E-mail" required>' +
-      '<input id="nSenha" placeholder="Senha" required minlength="6" value="' + gerarSenha() + '" style="flex:0 1 170px"><button class="btn">Cadastrar</button></div>' +
+      '<input id="nSenha" placeholder="Senha" required minlength="6" value="' + gerarSenha() + '" style="flex:0 1 170px">' +
+      '<select id="nTurma" class="sel-sessao">' + turmas.map(function (x) { return '<option value="' + x.id + '"' + (x.id === turmaId ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select>' +
+      '<button class="btn">Cadastrar</button></div>' +
       '<p class="miudo" style="margin-top:8px">A senha já vem sugerida; pode trocar. Depois de cadastrar, aparece a mensagem pronta para mandar no WhatsApp.</p>' +
       '<div id="msgPronta"></div></form>';
-    if (!alunos.length) h += '<p class="miudo">Nenhum mentorado ainda. Adicione acima: só quem estiver nesta lista consegue entrar.</p>';
+    if (!gente.length) h += '<p class="miudo">Ninguém nesta turma ainda. Só quem estiver cadastrado consegue entrar.</p>';
     h += '<div class="grade-alunos">';
-    alunos.forEach(function (a) {
-      var r = resumoAluno(a);
-      h += '<a class="cartao aluno" href="#aluno=' + encodeURIComponent(a.email) + '"><div class="nome">' + esc(a.nome || '(sem nome)') + '</div><div class="em">' + esc(a.email) + '</div>' +
+    gente.forEach(function (a) {
+      var r = resumoAluno(a), fim = acessoAte(a), expirado = fim && fim < hojeISO();
+      h += '<a class="cartao aluno" href="#p=' + encodeURIComponent(a.email) + '"><div class="nome">' + esc(a.nome || '(sem nome)') + (expirado ? ' <span class="pill cinza">acesso encerrado</span>' : '') + '</div><div class="em">' + esc(a.email) + '</div>' +
         '<div class="barrinha"><div style="width:' + (r.lib ? Math.round(r.feitos / r.lib * 100) : 0) + '%"></div></div>' +
-        '<div class="linha-info"><span>' + r.feitos + ' de ' + r.lib + ' respondidos</span><span>' + (r.ultima ? quando(r.ultima) : !logins[a.email] ? '⚠ sem login' : (a.aceite_privacidade ? 'entrou' : 'ainda não entrou')) + '</span></div></a>';
+        '<div class="linha-info"><span>' + r.feitos + ' de ' + r.lib + ' concluídos</span><span>' + (r.ultima ? quando(r.ultima) : !logins[a.email] ? '⚠ sem login' : (a.aceite_privacidade ? 'entrou' : 'ainda não entrou')) + '</span></div></a>';
     });
-    h += '</div>';
-    app.innerHTML = h;
-
+    app.innerHTML = h + '</div>';
     $('#fNovo').onsubmit = async function (e) {
       e.preventDefault();
-      var nome = $('#nNome').value.trim(), email = $('#nEmail').value.trim().toLowerCase(), senha = $('#nSenha').value.trim();
+      var nome = $('#nNome').value.trim(), email = $('#nEmail').value.trim().toLowerCase(), senha = $('#nSenha').value.trim(), tId = Number($('#nTurma').value);
       var b = $('#fNovo button'); b.disabled = true; b.textContent = 'Cadastrando…';
-      var res = await cadastrar(nome, email, senha);
+      var res = await cadastrar(nome, email, senha, tId);
       b.disabled = false; b.textContent = 'Cadastrar';
       if (!res.ok) { toast(res.erro); return; }
       await carregar(); telaAlunos();
-      mostrarMensagem($('#msgPronta'), nome, email, res.senha);
+      mostrarMensagem($('#msgPronta'), nome, email, senha);
       toast('Cadastro feito ✓');
     };
   }
-
-  async function cadastrar(nome, email, senha) {
+  async function cadastrar(nome, email, senha, tId) {
     if (senha.length < 6) return { ok: false, erro: 'A senha precisa ter pelo menos 6 caracteres.' };
-    var r = await sb.from('alunos').upsert({ nome: nome, email: email }, { onConflict: 'email' });
+    var linha = { nome: nome, email: email }; if (tId) linha.turma_id = tId;
+    var r = await sb.from('alunos').upsert(linha, { onConflict: 'email' });
     if (r.error) return { ok: false, erro: msgErro(r.error) };
     if (logins[email]) {
       var t = await sb.rpc('admin_trocar_senha', { p_email: email, p_senha: senha });
-      return t.error ? { ok: false, erro: msgErro(t.error) } : { ok: true, senha: senha };
+      return t.error ? { ok: false, erro: msgErro(t.error) } : { ok: true };
     }
     var su = await tmp.auth.signUp({ email: email, password: senha });
     if (su.error && /already/i.test(su.error.message)) {
       var t2 = await sb.rpc('admin_trocar_senha', { p_email: email, p_senha: senha });
-      return t2.error ? { ok: false, erro: msgErro(t2.error) } : { ok: true, senha: senha };
+      return t2.error ? { ok: false, erro: msgErro(t2.error) } : { ok: true };
     }
     if (su.error) return { ok: false, erro: msgErro(su.error) };
-    if (su.data && !su.data.session) {
-      return { ok: false, erro: 'O Supabase está pedindo confirmação por e-mail. Desligue "Confirm email" em Authentication → Sign In / Providers → Email e cadastre de novo.' };
-    }
+    if (su.data && !su.data.session) return { ok: false, erro: 'O Supabase está pedindo confirmação por e-mail. Desligue "Confirm email" em Authentication → Sign In / Providers → Email e cadastre de novo.' };
     await tmp.auth.signOut().catch(function () {});
-    return { ok: true, senha: senha };
+    return { ok: true };
   }
-
   function mostrarMensagem(box, nome, email, senha) {
     var msg = 'Oi ' + (nome || '').split(' ')[0] + '! ✨ Seu acesso à área da Mentoria Estrela, onde você vai responder os exercícios:\n\n' +
-      LINK + '\n\nE-mail: ' + email + '\nSenha: ' + senha + '\n\nGuarde esta mensagem. As respostas são salvas sozinhas e só eu vejo.';
+      LINK + '\n\nE-mail: ' + email + '\nSenha: ' + senha + '\n\nGuarde esta mensagem. As respostas são salvas automaticamente e só eu vejo.';
     box.innerHTML = '<div class="caixa-com" style="margin-top:12px"><label>Mensagem para ' + esc(nome || email) + '</label>' +
       '<textarea readonly rows="8">' + esc(msg) + '</textarea>' +
       '<div class="acoes"><button type="button" class="btn peq leve" data-copiar>Copiar</button>' +
       '<a class="btn peq ouro" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(msg) + '">Abrir no WhatsApp</a></div></div>';
     $('[data-copiar]', box).onclick = function () {
-      var ta = $('textarea', box); ta.select();
+      $('textarea', box).select();
       (navigator.clipboard ? navigator.clipboard.writeText(msg) : Promise.reject()).then(function () { toast('Copiado ✓'); }, function () { document.execCommand('copy'); toast('Copiado ✓'); });
     };
   }
 
-  /* ---------- um mentorado ---------- */
+  /* ---------- UM PARTICIPANTE ---------- */
   function telaAluno(email) {
     var a = alunos.filter(function (x) { return x.email === email; })[0];
     if (!a) { location.hash = ''; return; }
-    var h = '<p><a href="#" class="miudo">← todos os mentorados</a></p>' +
+    var fim = acessoAte(a), tA = turmas.filter(function (x) { return x.id === a.turma_id; })[0];
+    var h = '<p><a href="#" class="miudo">← participantes</a> · <a href="#aovivo" class="miudo">aula ao vivo</a></p>' +
       '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0">' + esc(a.nome || a.email) + '</h2><span class="vivo">atualiza sozinho</span></div>' +
-      '<p class="miudo" style="margin-bottom:16px">' + esc(a.email) + (!logins[a.email] ? ' · ⚠ ainda sem login: crie no fim da página' : logins[a.email].ultimo_acesso ? ' · último acesso ' + quando(logins[a.email].ultimo_acesso) : ' · ainda não entrou') + '</p>';
+      '<p class="miudo">' + esc(a.email) + ' · ' + esc(tA ? tA.nome : 'sem turma') + ' · acesso até ' + dataBR(fim) +
+      (!logins[a.email] ? ' · ⚠ ainda sem login: crie no fim da página' : logins[a.email].ultimo_acesso ? ' · último acesso ' + quando(logins[a.email].ultimo_acesso) : ' · ainda não entrou') + '</p>';
+    var n = anotacoes[a.email];
+    h += '<div class="anot"><label for="anotTexto">Minhas anotações · só eu vejo</label><textarea id="anotTexto" placeholder="O que eu não posso esquecer sobre ' + esc((a.nome || '').split(' ')[0] || 'esta pessoa') + '…">' + esc(n ? n.texto : '') + '</textarea>' +
+      '<div class="acoes" style="display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:6px;font-size:13px;color:var(--suave)"><span id="anotSt">' + (n ? 'salvo ' + quando(n.atualizado_em) : '') + '</span><button class="btn peq roxo" id="bAnot">Salvar anotação</button></div></div>';
     if (!exercicios.length) h += '<p class="miudo">Nenhum exercício cadastrado ainda.</p>';
     sessoes.forEach(function (s) {
       var exs = exercicios.filter(function (e) { return e.sessao === s.numero; });
@@ -171,36 +294,47 @@
       exs.forEach(function (e) { h += blocoEx(a, e); });
       h += '</section>';
     });
-    h += '<details class="cartao" style="margin-top:30px"><summary class="miudo" style="cursor:pointer">Editar ou remover mentorado</summary>' +
-      '<div class="form-linha" style="margin-top:10px"><input id="eNome" value="' + esc(a.nome) + '"><button class="btn peq" id="bNome">Salvar nome</button></div>' +
+    h += '<details class="cartao" style="margin-top:30px"><summary class="miudo" style="cursor:pointer">Acesso, senha, turma e remoção</summary>' +
+      '<p class="miudo" style="margin:12px 0 6px">Renovar: escolha até quando o acesso vale (o padrão da turma é ' + dataBR(tA && tA.fim) + ').</p>' +
+      '<div class="form-linha"><input type="date" id="eAte" value="' + esc(fim || '') + '"><button class="btn peq ouro" id="bAte">Salvar acesso</button><button class="btn peq leve" id="bMais">+ 1 mês</button></div>' +
+      '<div class="form-linha" style="margin-top:10px"><input id="eNome" value="' + esc(a.nome) + '"><select id="eTurma" class="sel-sessao">' + turmas.map(function (x) { return '<option value="' + x.id + '"' + (x.id === a.turma_id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select><button class="btn peq" id="bNome">Salvar nome e turma</button></div>' +
       '<div class="form-linha" style="margin-top:10px"><input id="eSenha" value="' + gerarSenha() + '"><button class="btn peq ouro" id="bSenha">' + (logins[a.email] ? 'Definir nova senha' : 'Criar login com esta senha') + '</button></div><div id="msgSenha"></div>' +
-      '<p class="miudo" style="margin:12px 0 6px">Remover apaga também todas as respostas e comentários deste mentorado (pedido de exclusão LGPD). O login em si fica no Supabase → Authentication → Users.</p>' +
+      '<p class="miudo" style="margin:14px 0 6px">Remover apaga também todas as respostas, comentários e anotações (pedido de exclusão LGPD). O login em si fica no Supabase → Authentication → Users.</p>' +
       '<button class="btn leve peq" id="bRemover" style="color:#A3283A;border-color:#E9B8BF">Remover ' + esc(a.nome || a.email) + '</button></details>';
     var abertos = $$('details.ex[open]').map(function (d) { return d.getAttribute('data-ex'); });
     app.innerHTML = h;
     abertos.forEach(function (id) { var d = $('details.ex[data-ex="' + CSS.escape(id) + '"]'); if (d) d.open = true; });
     ligarAluno(a);
+    $$('details.ex').forEach(function (d) { prepararFotos(d, { leitura: true }); });
+    clearInterval(vivoTimer);
+    vivoTimer = setInterval(async function () {
+      if (document.hidden) return;
+      if (!(await recarregarRespostas())) return;
+      $$('details.ex').forEach(function (d) {
+        var e = exercicios.filter(function (x) { return x.id === d.getAttribute('data-ex'); })[0];
+        if (!e) return;
+        var tmpDiv = document.createElement('div'); tmpDiv.innerHTML = blocoEx(a, e);
+        var nd = tmpDiv.firstChild;
+        d.querySelector('summary').innerHTML = nd.querySelector('summary').innerHTML;
+        d.querySelector('.respostas-ex').innerHTML = nd.querySelector('.respostas-ex').innerHTML;
+        prepararFotos(d.querySelector('.respostas-ex'), { leitura: true });
+      });
+    }, 7000);
   }
-
   function blocoEx(a, e) {
     var k = chave(a.email, e.id), r = respostas[k], c = comentarios[k];
-    var lib = liberadoPara(e.id, a.email), turma = libTurma(e.id);
-    var p = progresso(e.conteudo, r && r.dados);
-    var est = !lib ? '<span class="pill cinza">não liberado</span>'
-      : (p.total && p.feitos >= p.total) ? '<span class="pill verde">respondido</span>'
-      : p.feitos ? '<span class="pill">' + p.feitos + ' de ' + p.total + '</span>' : '<span class="pill ouro">liberado</span>';
-    var h = '<details class="ex" data-ex="' + esc(e.id) + '"><summary><span class="t">' + esc(e.titulo) + ' <span class="miudo">· ' + esc(e.tipo) + '</span></span>' + est +
+    var lib = liberadoPara(e.id, a), turmaLib = libTurma(e.id, a.turma_id);
+    var h = '<details class="ex" data-ex="' + esc(e.id) + '"><summary><span class="t">' + esc(e.titulo) + ' <span class="miudo">· ' + esc(e.tipo) + '</span></span>' + statusEx(a, e) +
       (r ? '<span class="miudo">' + quando(r.atualizado_em) + '</span>' : '') + (c && c.texto.trim() ? '<span title="Você comentou">💬</span>' : '') + '</summary><div class="ex-corpo">';
     h += '<p style="margin-bottom:12px"><label class="miudo" style="display:inline-flex;gap:8px;align-items:center;cursor:pointer">' +
-      '<input type="checkbox" class="libInd" data-ex="' + esc(e.id) + '"' + (lib ? ' checked' : '') + (turma ? ' disabled' : '') + ' style="width:18px;height:18px;accent-color:var(--rosa)"> ' +
-      (turma ? 'liberado para a turma toda' : 'liberado para ' + esc(a.nome || 'este mentorado')) + '</label></p>';
-    h += '<div class="respostas-ex">' + htmlCampos(e.conteudo, r && r.dados, true) + '</div>';
-    h += '<div class="caixa-com"><label for="com_' + esc(e.id) + '">Seu comentário</label>' +
-      '<textarea id="com_' + esc(e.id) + '" data-ex="' + esc(e.id) + '" placeholder="Escreva aqui durante a sessão. O mentorado vê embaixo do exercício.">' + esc(c ? c.texto : '') + '</textarea>' +
+      '<input type="checkbox" class="libInd" data-ex="' + esc(e.id) + '"' + (lib ? ' checked' : '') + (turmaLib ? ' disabled' : '') + ' style="width:18px;height:18px;accent-color:var(--rosa)"> ' +
+      (turmaLib ? 'liberado para a turma toda' : 'liberado só para ' + esc((a.nome || 'esta pessoa').split(' ')[0])) + '</label></p>';
+    h += '<div class="respostas-ex">' + (ehMaas(e) ? MAAS.leitura(e, r && r.dados) : htmlCampos(e.conteudo, r && r.dados, true)) + '</div>';
+    h += '<div class="caixa-com"><label for="com_' + esc(e.id) + '">Seu comentário · a pessoa vê</label>' +
+      '<textarea id="com_' + esc(e.id) + '" data-ex="' + esc(e.id) + '" placeholder="Escreva durante a sessão. Aparece embaixo do exercício para a pessoa.">' + esc(c ? c.texto : '') + '</textarea>' +
       '<div class="acoes"><span class="estcom"></span><button class="btn peq ouro bCom" data-ex="' + esc(e.id) + '">Salvar comentário</button></div></div>';
     return h + '</div></details>';
   }
-
   function ligarAluno(a) {
     $$('.bCom').forEach(function (b) {
       b.onclick = async function () {
@@ -214,17 +348,39 @@
       };
     });
     $$('.caixa-com textarea').forEach(function (t) { t.oninput = function () { t.dataset.sujo = '1'; t.parentNode.querySelector('.estcom').textContent = 'não salvo'; }; });
-    $$('.libInd').forEach(function (cb) {
-      cb.onchange = async function () { await alternar(cb.getAttribute('data-ex'), a.email, cb.checked); telaAluno(a.email); };
-    });
-    $('#bNome').onclick = async function () {
-      var r = await sb.from('alunos').update({ nome: $('#eNome').value.trim() }).eq('email', a.email);
+    $('#anotTexto').oninput = function () { this.dataset.sujo = '1'; $('#anotSt').textContent = 'não salvo'; };
+    $('#bAnot').onclick = async function () {
+      var t = $('#anotTexto'), r = await sb.from('anotacoes').upsert({ aluno_email: a.email, texto: t.value, atualizado_em: new Date().toISOString() });
       if (r.error) { toast(msgErro(r.error)); return; }
-      a.nome = $('#eNome').value.trim(); toast('Nome salvo'); telaAluno(a.email);
+      anotacoes[a.email] = { aluno_email: a.email, texto: t.value, atualizado_em: new Date().toISOString() };
+      t.dataset.sujo = ''; $('#anotSt').textContent = 'salvo ✓';
+    };
+    $$('.libInd').forEach(function (cb) {
+      cb.onchange = async function () {
+        var id = cb.getAttribute('data-ex'), r;
+        if (cb.checked) r = await sb.from('liberacoes').insert({ exercicio_id: id, aluno_email: a.email });
+        else r = await sb.from('liberacoes').delete().eq('exercicio_id', id).eq('aluno_email', a.email);
+        if (r.error) toast(msgErro(r.error)); else toast(cb.checked ? 'Liberado ✓' : 'Bloqueado');
+        var l = await sb.from('liberacoes').select('*'); if (!l.error) libs = l.data;
+        telaAluno(a.email);
+      };
+    });
+    async function salvarAte(v) {
+      var r = await sb.from('alunos').update({ acesso_ate: v || null }).eq('email', a.email);
+      if (r.error) { toast(msgErro(r.error)); return; }
+      a.acesso_ate = v || null; toast('Acesso até ' + dataBR(acessoAte(a)) + ' ✓'); telaAluno(a.email);
+    }
+    $('#bAte').onclick = function () { salvarAte($('#eAte').value); };
+    $('#bMais').onclick = function () { var base = acessoAte(a); if (!base || base < hojeISO()) base = hojeISO(); salvarAte(maisMeses(base, 1)); };
+    $('#bNome').onclick = async function () {
+      var nome = $('#eNome').value.trim(), tId = Number($('#eTurma').value);
+      var r = await sb.from('alunos').update({ nome: nome, turma_id: tId }).eq('email', a.email);
+      if (r.error) { toast(msgErro(r.error)); return; }
+      a.nome = nome; a.turma_id = tId; toast('Salvo ✓'); telaAluno(a.email);
     };
     $('#bSenha').onclick = async function () {
       var senha = $('#eSenha').value.trim(), b = this; b.disabled = true;
-      var res = await cadastrar(a.nome, a.email, senha);
+      var res = await cadastrar(a.nome, a.email, senha, a.turma_id);
       b.disabled = false;
       if (!res.ok) { toast(res.erro); return; }
       await carregar();
@@ -239,116 +395,127 @@
     };
   }
 
-  /* atualiza as respostas sozinho enquanto a página do mentorado está aberta */
-  function iniciarVivo(email) {
-    clearInterval(vivoTimer);
-    vivoTimer = setInterval(async function () {
-      if (document.hidden) return;
-      var r = await sb.from('respostas').select('*').eq('aluno_email', email);
-      if (r.error) return;
-      var mudou = false;
-      r.data.forEach(function (x) {
-        var k = chave(x.aluno_email, x.exercicio_id);
-        if (!respostas[k] || respostas[k].atualizado_em !== x.atualizado_em) { respostas[k] = x; mudou = true; }
-      });
-      if (!mudou) return;
-      /* só redesenha as respostas, sem mexer no comentário que você está digitando */
-      var a = alunos.filter(function (x) { return x.email === email; })[0];
-      $$('details.ex').forEach(function (d) {
-        var e = exercicios.filter(function (x) { return x.id === d.getAttribute('data-ex'); })[0];
-        if (!e) return;
-        var novo = document.createElement('div'); novo.innerHTML = blocoEx(a, e);
-        var nd = novo.firstChild;
-        d.querySelector('summary').innerHTML = nd.querySelector('summary').innerHTML;
-        d.querySelector('.respostas-ex').innerHTML = nd.querySelector('.respostas-ex').innerHTML;
-      });
-    }, 8000);
-  }
-
-  /* ---------- liberar ---------- */
-  async function alternar(exId, email, ligar) {
-    var r;
-    if (ligar) r = await sb.from('liberacoes').insert({ exercicio_id: exId, aluno_email: email });
-    else if (email === null) r = await sb.from('liberacoes').delete().eq('exercicio_id', exId).is('aluno_email', null);
-    else r = await sb.from('liberacoes').delete().eq('exercicio_id', exId).eq('aluno_email', email);
-    if (r.error && !/duplicate/.test(r.error.message)) { toast(msgErro(r.error)); }
+  /* ---------- LIBERAR ---------- */
+  async function alternarTurma(exId, ligar) {
+    var r = ligar ? await sb.from('liberacoes').insert({ exercicio_id: exId, turma_id: turmaId })
+                  : await sb.from('liberacoes').delete().eq('exercicio_id', exId).eq('turma_id', turmaId).is('aluno_email', null);
+    if (r.error && !/duplicate/.test(r.error.message)) toast(msgErro(r.error)); else toast(ligar ? 'Liberado para a turma ✓' : 'Bloqueado');
     var l = await sb.from('liberacoes').select('*'); if (!l.error) libs = l.data;
-    toast(ligar ? 'Liberado ✓' : 'Bloqueado');
   }
-
   function telaLiberar() {
-    var h = '<h2>Liberar exercícios</h2><p class="miudo" style="margin-bottom:12px">Marque a coluna <b>Turma</b> para liberar para todos, ou só a coluna de um mentorado. O mentorado vê na hora em que abre ou volta para a página.</p>';
+    var t = turma(), gente = daTurma();
+    var h = '<h2>Liberar · ' + esc(t ? t.nome : '') + '</h2><p class="miudo" style="margin-bottom:12px">Coluna <b>Turma</b> libera para todos desta turma; as outras colunas liberam só para uma pessoa. A tela do participante atualiza sozinha em alguns segundos.</p>';
     if (!exercicios.length) { app.innerHTML = h + '<p class="miudo">Nenhum exercício cadastrado ainda.</p>'; return; }
-    h += '<div class="tabela-wrap"><table class="lib"><thead><tr><th>Exercício</th><th class="turma">Turma toda</th>';
-    alunos.forEach(function (a) { h += '<th title="' + esc(a.email) + '">' + esc((a.nome || a.email).split(' ')[0]) + '</th>'; });
+    h += '<div class="tabela-wrap"><table class="lib"><thead><tr><th>Exercício</th><th class="turma">Turma</th>';
+    gente.forEach(function (a) { h += '<th title="' + esc(a.email) + '">' + esc((a.nome || a.email).split(' ')[0]) + '</th>'; });
     h += '</tr></thead><tbody>';
     sessoes.forEach(function (s) {
       var exs = exercicios.filter(function (e) { return e.sessao === s.numero; });
       if (!exs.length) return;
-      var todos = exs.every(function (e) { return libTurma(e.id); });
-      h += '<tr class="sess"><td>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</td><td class="turma"><button class="btn peq ' + (todos ? 'leve' : '') + ' bSessao" data-s="' + s.numero + '" data-on="' + (todos ? '0' : '1') + '">' + (todos ? 'bloquear sessão' : 'liberar sessão') + '</button></td><td colspan="' + alunos.length + '"></td></tr>';
+      var todos = exs.every(function (e) { return libTurma(e.id, turmaId); });
+      h += '<tr class="sess"><td>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</td><td class="turma"><button class="btn peq ' + (todos ? 'leve' : '') + ' bSessao" data-s="' + s.numero + '" data-on="' + (todos ? '0' : '1') + '">' + (todos ? 'bloquear sessão' : 'liberar sessão') + '</button></td><td colspan="' + gente.length + '"></td></tr>';
       exs.forEach(function (e) {
-        var t = libTurma(e.id);
-        h += '<tr><td>' + esc(e.titulo) + ' <span class="miudo">· ' + esc(e.tipo) + '</span></td><td class="turma"><input type="checkbox" class="cb" data-ex="' + esc(e.id) + '" data-a=""' + (t ? ' checked' : '') + ' aria-label="Turma toda: ' + esc(e.titulo) + '"></td>';
-        alunos.forEach(function (a) {
-          h += '<td><input type="checkbox" class="cb" data-ex="' + esc(e.id) + '" data-a="' + esc(a.email) + '"' + (t || libIndividual(e.id, a.email) ? ' checked' : '') + (t ? ' disabled title="liberado para a turma"' : '') + ' aria-label="' + esc(a.nome) + ': ' + esc(e.titulo) + '"></td>';
+        var tl = libTurma(e.id, turmaId);
+        h += '<tr><td>' + esc(e.titulo) + ' <span class="miudo">· ' + esc(e.tipo) + '</span></td><td class="turma"><input type="checkbox" class="cbT" data-ex="' + esc(e.id) + '"' + (tl ? ' checked' : '') + ' aria-label="Turma: ' + esc(e.titulo) + '"></td>';
+        gente.forEach(function (a) {
+          h += '<td><input type="checkbox" class="cbA" data-ex="' + esc(e.id) + '" data-a="' + esc(a.email) + '"' + (tl || libIndividual(e.id, a.email) ? ' checked' : '') + (tl ? ' disabled title="liberado para a turma"' : '') + ' aria-label="' + esc(a.nome) + ': ' + esc(e.titulo) + '"></td>';
         });
         h += '</tr>';
       });
     });
-    h += '</tbody></table></div>';
-    app.innerHTML = h;
-    $$('.cb').forEach(function (cb) {
-      cb.onchange = async function () { cb.disabled = true; await alternar(cb.getAttribute('data-ex'), cb.getAttribute('data-a') || null, cb.checked); telaLiberar(); };
+    app.innerHTML = h + '</tbody></table></div>';
+    $$('.cbT').forEach(function (cb) { cb.onchange = async function () { cb.disabled = true; await alternarTurma(cb.getAttribute('data-ex'), cb.checked); telaLiberar(); }; });
+    $$('.cbA').forEach(function (cb) {
+      cb.onchange = async function () {
+        cb.disabled = true;
+        var id = cb.getAttribute('data-ex'), em = cb.getAttribute('data-a');
+        var r = cb.checked ? await sb.from('liberacoes').insert({ exercicio_id: id, aluno_email: em }) : await sb.from('liberacoes').delete().eq('exercicio_id', id).eq('aluno_email', em);
+        if (r.error) toast(msgErro(r.error));
+        var l = await sb.from('liberacoes').select('*'); if (!l.error) libs = l.data;
+        telaLiberar();
+      };
     });
     $$('.bSessao').forEach(function (b) {
       b.onclick = async function () {
         b.disabled = true;
         var n = Number(b.getAttribute('data-s')), on = b.getAttribute('data-on') === '1';
         var ids = exercicios.filter(function (e) { return e.sessao === n; }).map(function (e) { return e.id; });
-        var r = on
-          ? await sb.from('liberacoes').insert(ids.filter(function (id) { return !libTurma(id); }).map(function (id) { return { exercicio_id: id, aluno_email: null }; }))
-          : await sb.from('liberacoes').delete().in('exercicio_id', ids).is('aluno_email', null);
-        if (r.error) toast(msgErro(r.error)); else toast(on ? 'Sessão liberada para a turma ✓' : 'Sessão bloqueada');
+        var r = on ? await sb.from('liberacoes').insert(ids.filter(function (id) { return !libTurma(id, turmaId); }).map(function (id) { return { exercicio_id: id, turma_id: turmaId }; }))
+                   : await sb.from('liberacoes').delete().in('exercicio_id', ids).eq('turma_id', turmaId).is('aluno_email', null);
+        if (r.error) toast(msgErro(r.error)); else toast(on ? 'Sessão liberada ✓' : 'Sessão bloqueada');
         var l = await sb.from('liberacoes').select('*'); if (!l.error) libs = l.data;
         telaLiberar();
       };
     });
   }
 
+  /* ---------- TURMAS ---------- */
+  function telaTurmas() {
+    var h = '<h2>Turmas</h2><p class="miudo" style="margin-bottom:12px">Cada participante só vê a própria turma. O acesso termina sozinho na data de fim (padrão: 5 meses depois do início). Para alguém continuar, use "Renovar" na página da pessoa.</p>';
+    turmas.forEach(function (t) {
+      var n = alunos.filter(function (a) { return a.turma_id === t.id; }).length;
+      h += '<div class="cartao"><div class="form-linha" style="align-items:center"><input data-tn="' + t.id + '" value="' + esc(t.nome) + '">' +
+        '<label class="miudo">início <input type="date" data-ti="' + t.id + '" value="' + t.inicio + '"></label>' +
+        '<label class="miudo">fim do acesso <input type="date" data-tf="' + t.id + '" value="' + t.fim + '"></label>' +
+        '<button class="btn peq" data-ts="' + t.id + '">Salvar</button></div><p class="miudo" style="margin-top:6px">' + n + ' participante' + (n === 1 ? '' : 's') + (t.fim < hojeISO() ? ' · <b>acesso encerrado</b>' : '') + '</p></div>';
+    });
+    var hoje = hojeISO();
+    h += '<form class="cartao" id="fTurma"><h3 style="margin-bottom:8px">Nova turma</h3><div class="form-linha" style="align-items:center"><input id="tNome" required placeholder="Turma ' + (turmas.length + 1) + '" value="Turma ' + (turmas.length + 1) + '">' +
+      '<label class="miudo">início <input type="date" id="tIni" value="' + hoje + '"></label><label class="miudo">fim <input type="date" id="tFim" value="' + maisMeses(hoje, 5) + '"></label><button class="btn">Criar turma</button></div></form>';
+    app.innerHTML = h;
+    $('#tIni').onchange = function () { $('#tFim').value = maisMeses(this.value, 5); };
+    $$('[data-ts]').forEach(function (b) {
+      b.onclick = async function () {
+        var id = Number(b.getAttribute('data-ts'));
+        var r = await sb.from('turmas').update({ nome: $('[data-tn="' + id + '"]').value.trim(), inicio: $('[data-ti="' + id + '"]').value, fim: $('[data-tf="' + id + '"]').value }).eq('id', id);
+        if (r.error) { toast(msgErro(r.error)); return; }
+        toast('Turma salva ✓'); await carregar(); telaTurmas();
+      };
+    });
+    $('#fTurma').onsubmit = async function (e) {
+      e.preventDefault();
+      var r = await sb.from('turmas').insert({ nome: $('#tNome').value.trim(), inicio: $('#tIni').value, fim: $('#tFim').value }).select().single();
+      if (r.error) { toast(msgErro(r.error)); return; }
+      turmaId = r.data.id; guardarLocal('turma_atual', turmaId);
+      toast('Turma criada ✓'); await carregar(); telaTurmas();
+    };
+  }
+
   /* ---------- rotas ---------- */
   function rota() {
     clearInterval(vivoTimer);
-    var hsh = location.hash, aba = 'alunos';
-    var m = hsh.match(/^#aluno=(.+)$/);
-    if (hsh === '#liberar') { aba = 'liberar'; telaLiberar(); }
-    else if (m) { var em = decodeURIComponent(m[1]); telaAluno(em); iniciarVivo(em); }
+    var hsh = location.hash, aba = 'alunos', m = hsh.match(/^#p=(.+)$/);
+    if (hsh === '#aovivo') { aba = 'aovivo'; telaVivo(); }
+    else if (hsh === '#liberar') { aba = 'liberar'; telaLiberar(); }
+    else if (hsh === '#turmas') { aba = 'turmas'; telaTurmas(); }
+    else if (m) { aba = ''; telaAluno(decodeURIComponent(m[1])); }
     else telaAlunos();
     $$('#abas a').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-aba') === aba); });
     window.scrollTo(0, 0);
+  }
+  function temRascunho() {
+    return $$('.caixa-com textarea, #anotTexto').some(function (t) { return t.dataset.sujo === '1'; });
   }
   window.addEventListener('hashchange', async function () {
     try { await carregar(); } catch (e) {}
     rota();
   });
-  window.addEventListener('beforeunload', function (e) {
-    if ($$('.caixa-com textarea').some(function (t) { return t.dataset.sujo === '1'; })) { e.preventDefault(); e.returnValue = ''; }
-  });
+  window.addEventListener('beforeunload', function (e) { if (temRascunho()) { e.preventDefault(); e.returnValue = ''; } });
+  $('#selTurma').onchange = function () { turmaId = Number(this.value); guardarLocal('turma_atual', turmaId); if (/^#p=/.test(location.hash)) location.hash = ''; else rota(); };
 
   var iniciado = false;
   async function iniciar(s) {
     if (iniciado) return; iniciado = true;
-    if (/access_token|refresh_token/.test(location.hash)) history.replaceState(null, '', location.pathname);
     $('#bSair').hidden = false;
     $('#bSair').onclick = async function () { await sb.auth.signOut(); iniciado = false; location.hash = ''; telaLogin(); };
     var a = await sb.rpc('eh_admin');
     if (!a.data) {
-      app.innerHTML = '<div class="cartao" style="max-width:460px;margin:30px auto"><h2>Sem acesso ao painel</h2><p>Você entrou como <b>' + esc(s.user.email) + '</b>, que não é administradora. <a href="./">Ir para a área do mentorado</a>.</p></div>';
+      app.innerHTML = '<div class="cartao" style="max-width:460px;margin:30px auto"><h2>Sem acesso ao painel</h2><p>Você entrou como <b>' + esc(s.user.email) + '</b>, que não é administradora. <a href="./">Ir para a área do participante</a>.</p></div>';
       return;
     }
     $('#abas').hidden = false;
-    try { await carregar(); rota(); }
-    catch (err) { app.innerHTML = '<div class="cartao"><p>' + esc(msgErro(err)) + '</p><button class="btn" onclick="location.reload()">Tentar de novo</button></div>'; }
+    try { await carregar(); if (!location.hash) location.hash = '#aovivo'; else rota(); }
+    catch (err) { app.innerHTML = '<div class="cartao"><p>' + esc(msgErro(err)) + '</p><p class="miudo">Se a mensagem fala de "turmas" ou "anotacoes", rode de novo o arquivo SQL atualizado no Supabase.</p><button class="btn" onclick="location.reload()">Tentar de novo</button></div>'; }
   }
   sb.auth.getSession().then(function (r) { if (r.data.session) iniciar(r.data.session); else telaLogin(); });
   sb.auth.onAuthStateChange(function (ev, s) { if (ev === 'SIGNED_IN' && s) iniciar(s); });
