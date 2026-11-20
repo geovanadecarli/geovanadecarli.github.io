@@ -56,7 +56,7 @@
       var email = $('#email').value.trim().toLowerCase(), b = $('#bEntrar');
       guardarLocal('me_email', email);
       b.disabled = true; b.textContent = 'Entrando…';
-      var r = await sb.auth.signInWithPassword({ email: email, password: $('#senha').value });
+      var r = await sb.auth.signInWithPassword({ email: email, password: $('#senha').value.trim() });
       if (r.error) { telaLogin(esc(msgErro(r.error))); return; }
       iniciar(r.data.session);
     });

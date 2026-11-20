@@ -116,7 +116,7 @@
     $('#f').onsubmit = async function (e) {
       e.preventDefault();
       var email = $('#email').value.trim().toLowerCase(); guardarLocal('me_email', email);
-      var r = await sb.auth.signInWithPassword({ email: email, password: $('#senha').value });
+      var r = await sb.auth.signInWithPassword({ email: email, password: $('#senha').value.trim() });
       if (r.error) telaLogin(esc(msgErro(r.error))); else iniciar(r.data.session);
     };
   }
