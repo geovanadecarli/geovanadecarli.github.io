@@ -27,7 +27,9 @@ function esc(t) {
 }
 /* texto com quebras de linha e **negrito** simples */
 function texto(t) {
-  return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/(https:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">$1</a>')
+    .replace(/\n/g, '<br>');
 }
 function $(s, r) { return (r || document).querySelector(s); }
 function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
