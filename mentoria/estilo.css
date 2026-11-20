@@ -293,3 +293,37 @@ body.ceu{background:#F7F1E6;color:#2A1F33;font-family:Inter,Jost,system-ui,sans-
 .maas-adm-notas td:last-child{text-align:right;white-space:nowrap}
 .maas-adm-notas tr.pr td{background:#FAF3E3}
 .maas,.maas-adm,.vivo-card{font-variant-numeric:lining-nums}
+
+/* telas extras da sessão guiada */
+.maas-romano{list-style:upper-roman;padding-left:28px;display:grid;gap:6px;margin:6px 0 10px;font-size:15.5px}
+.maas-romano li::marker{color:var(--o);font-family:'Cormorant Garamond',serif;font-weight:600}
+.maas-campo{margin-top:6px}
+.maas-simnao{display:flex;gap:8px;margin-top:8px}
+.maas-simnao label{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid #E8DCC4;border-radius:4px;padding:12px;background:#fff;cursor:pointer;font-weight:500}
+.maas-simnao label.on{border-color:var(--o);background:#FAF3E3;color:var(--r)}
+.maas-simnao input{accent-color:var(--r);width:18px;height:18px}
+.maas-eusou{list-style:none;display:grid;gap:8px;margin-top:8px}
+.maas-eusou li{display:flex;align-items:center;gap:10px;border-bottom:1px solid #E3D6BE}
+.maas-eusou span{font:600 19px 'Cormorant Garamond',serif;color:var(--r);white-space:nowrap}
+.maas-eusou input{flex:1;border:0;background:transparent;padding:10px 2px;font:400 16px Inter,Jost,sans-serif;color:var(--t);min-width:0}
+.maas-eusou input:focus{outline:none;border-bottom:1px solid var(--o)}
+.maas-so-titulo{text-align:center;padding:90px 24px 40px;min-height:62vh;display:flex;flex-direction:column;justify-content:center}
+.maas-so-titulo .maas-titulo{font-size:46px}
+.maas-so-titulo .maas-nav{margin-top:auto}
+.maas-presente{text-align:center}
+.presente-btn{background:none;border:0;cursor:pointer;margin:26px auto 4px;display:block;padding:10px;border-radius:50%}
+.caixa-presente{width:150px;height:150px;display:block;transition:transform .3s}
+.presente-btn:not(.aberto) .caixa-presente{animation:balanca 2.6s ease-in-out infinite}
+.presente-btn:hover .caixa-presente{transform:scale(1.05)}
+.presente-btn.aberto .tampa,.presente-btn.aberto .laco{transform:translateY(-16px) rotate(-8deg);transform-origin:60px 40px;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+@keyframes balanca{0%,100%{transform:rotate(0)}8%{transform:rotate(-5deg)}16%{transform:rotate(5deg)}24%{transform:rotate(0)}}
+@media (prefers-reduced-motion:reduce){.presente-btn:not(.aberto) .caixa-presente{animation:none}}
+.presente-revela{margin-top:8px;padding:22px 14px;border-top:1px solid var(--o2);border-bottom:1px solid var(--o2)}
+.presente-revela .maas-titulo{font-size:34px}
+.maas-agenda{display:grid;gap:10px;margin-top:6px}
+.ag-item{border:1px solid #E8DCC4;border-left:2px solid var(--o);border-radius:4px;background:#fff;padding:12px 14px}
+.ag-cat{font:500 10.5px/1.4 Inter,Jost,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--t2)}
+.ag-t{font:600 20px/1.25 'Cormorant Garamond',serif;color:var(--r);margin-top:2px}
+.ag-obs{font-size:14px;color:var(--t2);margin-top:4px}
+.ag-est{font-size:13px;color:var(--o);margin-top:6px;font-weight:500}
+.maas,.maas *,.maas-adm *{font-feature-settings:"lnum" 1}

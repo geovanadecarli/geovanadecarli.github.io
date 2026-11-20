@@ -1,18 +1,22 @@
 /* =====================================================================
-   MAAS · Mapa de Autoavaliação Sistêmico
+   SESSÃO GUIADA (Sessão 01 · MAAS)
    Os textos ficam no banco (exercicios.conteudo). Aqui só o funcionamento.
+   Telas: abertura → antes[] → intro MAAS → 11 pilares → roda → leitura
+          → depois[] → compromisso → salvo
+   Tipos de tela em antes/depois: perguntas · presente · titulo · agenda
+   Tipos de campo em "perguntas": paragrafo · marcar · simnao · eusou
    ===================================================================== */
 var MAAS = (function () {
-  var OURO = '#B8924A', ROXO = '#4B2A6B', ROXO_CLARO = '#CBBEDB';
+  var OURO = '#B8924A', ROXO_CLARO = '#CBBEDB';
 
   function nomes(c) { return (c.pilares || []).map(function (p) { return p.nome; }); }
   function vazio(c) {
     var n = (c.pilares || []).length;
-    return { passo: 0, notas: Array(n).fill(0), reflexoes: Array(n).fill(''), leitura: ['', '', '', ''], prioridades: null, atitude: '', concluido_em: null, historico: [] };
+    return { passo: 0, notas: Array(n).fill(0), reflexoes: Array(n).fill(''), leitura: ['', '', '', ''], prioridades: null, atitude: '', extra: {}, concluido_em: null, historico: [] };
   }
   function completar(c, d) {
     var v = vazio(c); d = d || {};
-    Object.keys(v).forEach(function (k) { if (d[k] === undefined) d[k] = v[k]; });
+    Object.keys(v).forEach(function (k) { if (d[k] === undefined || d[k] === null && k === 'extra') d[k] = v[k]; });
     return d;
   }
   function status(d) {
@@ -22,6 +26,27 @@ var MAAS = (function () {
   }
   function menores3(notas) {
     return notas.map(function (n, i) { return [n, i]; }).sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }).slice(0, 3).map(function (x) { return x[1]; });
+  }
+  function telasDe(c) {
+    var t = [{ k: 'abertura' }];
+    (c.antes || []).forEach(function (x) { t.push({ k: 'extra', x: x }); });
+    t.push({ k: 'intro' });
+    (c.pilares || []).forEach(function (p, i) { t.push({ k: 'pilar', i: i }); });
+    t.push({ k: 'roda' }, { k: 'leitura' });
+    (c.depois || []).forEach(function (x) { t.push({ k: 'extra', x: x }); });
+    t.push({ k: 'compromisso' }, { k: 'salvo' });
+    return t;
+  }
+  function idx(telas, k) { for (var i = 0; i < telas.length; i++) if (telas[i].k === k) return i; return 0; }
+  /* onde a pessoa está (para o painel ao vivo) */
+  function onde(c, d) {
+    if (!d) return { texto: 'não iniciada' };
+    if (d.concluido_em) return { texto: 'concluída' };
+    var t = telasDe(c)[d.passo || 0] || { k: 'abertura' };
+    if (t.k === 'pilar') return { texto: 'pilar ' + (t.i + 1) + ' de ' + c.pilares.length + ' · ' + c.pilares[t.i].nome, pilar: t.i };
+    var nomesT = { abertura: 'na abertura', intro: 'lendo sobre o MAAS', roda: 'vendo a roda', leitura: 'na leitura da roda', compromisso: 'no compromisso', salvo: 'concluída' };
+    if (t.k === 'extra') return { texto: t.x.titulo || 'em andamento' };
+    return { texto: nomesT[t.k] || 'em andamento' };
   }
 
   /* ---------- a roda ---------- */
@@ -37,7 +62,6 @@ var MAAS = (function () {
     }
     return '<polygon points="' + p.join(' ') + '" fill="none" stroke="' + OURO + '" stroke-width="1.2" stroke-linejoin="round"/>';
   }
-  /* o: { tamanho, nomes, destaque (índice), anterior (notas), anima, mini } */
   function radar(notas, o) {
     o = o || {};
     var S = o.tamanho || 320, n = notas.length, cx = S / 2, cy = S / 2;
@@ -71,45 +95,105 @@ var MAAS = (function () {
     return h;
   }
 
+  var CAIXA = '<svg viewBox="0 0 120 120" class="caixa-presente" aria-hidden="true">' +
+    '<rect x="18" y="52" width="84" height="56" rx="3" fill="#4B2A6B"/>' +
+    '<rect x="12" y="38" width="96" height="18" rx="3" fill="#5C3780" class="tampa"/>' +
+    '<rect x="54" y="38" width="12" height="70" fill="#B8924A"/>' +
+    '<path d="M60 38 C44 14 26 24 38 36 C44 41 54 39 60 38 Z M60 38 C76 14 94 24 82 36 C76 41 66 39 60 38 Z" fill="none" stroke="#B8924A" stroke-width="4" stroke-linejoin="round" class="laco"/></svg>';
+
   /* ---------- tela do participante ---------- */
   function montar(raiz, ex, dadosIniciais, ctx) {
-    var c = ex.conteudo, NP = c.pilares.length, nm = nomes(c);
+    var c = ex.conteudo, NP = c.pilares.length, nm = nomes(c), T = telasDe(c);
     var d = completar(c, JSON.parse(JSON.stringify(dadosIniciais || {})));
+    if (d.passo >= T.length) d.passo = 0;
     var timer = null;
     function salvarLogo(imediato) {
       clearTimeout(timer);
       if (ctx.aoDigitar) ctx.aoDigitar();
       timer = setTimeout(function () { ctx.salvar(d); }, imediato ? 0 : 800);
     }
-    function ir(p) { d.passo = p; salvarLogo(true); desenhar(true); }
+    function ir(p) { d.passo = Math.max(0, Math.min(T.length - 1, p)); salvarLogo(true); desenhar(true); }
 
     function topo(extra) {
       return '<div class="maas-topo"><a href="#" class="maas-voltar">← trilha</a><span class="maas-rot">SESSÃO 01 · ' + esc((c.abertura.titulo || '').toUpperCase()) + '</span></div>' + (extra || '');
     }
-    function barraPilares(i) {
-      return '<div class="maas-prog" aria-label="Pilar ' + (i + 1) + ' de ' + NP + '"><div style="width:' + ((i + 1) / NP * 100) + '%"></div></div>';
+    function barraGeral(p) {
+      return '<div class="maas-prog" aria-hidden="true"><div style="width:' + Math.round(p / (T.length - 2) * 100) + '%"></div></div>';
     }
     function slider(i, grande) {
       return '<div class="maas-nota' + (grande ? ' grande' : '') + '"><input type="range" min="0" max="10" step="1" value="' + (d.notas[i] || 0) + '" data-i="' + i + '" aria-label="Nota de 0 a 10 para ' + esc(nm[i]) + '"' +
         ' style="--p:' + ((d.notas[i] || 0) * 10) + '%"><output data-i="' + i + '">' + (d.notas[i] || 0) + '</output></div>';
     }
+    function nav(p, proxTexto, voltaTexto) {
+      return '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (p - 1) + '">' + (voltaTexto || '← Voltar') + '</button><button class="maas-btn" data-ir="' + (p + 1) + '">' + (proxTexto || 'Continuar →') + '</button></div>';
+    }
+
+    function campoExtra(f, n) {
+      var v = d.extra[f.id], h = '<div class="maas-campo"><label class="maas-q"><span class="maas-num">' + n + '</span><span class="maas-qt">' + texto(f.rotulo) + '</span></label>';
+      if (f.tipo === 'paragrafo') h += '<textarea class="maas-area" rows="4" data-x="' + esc(f.id) + '">' + esc(v || '') + '</textarea>';
+      else if (f.tipo === 'marcar') {
+        var sel = Array.isArray(v) ? v : [];
+        h += '<div class="maas-prior">' + f.opcoes.map(function (o) { var on = sel.indexOf(o) >= 0; return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-xm="' + esc(f.id) + '" value="' + esc(o) + '"' + (on ? ' checked' : '') + '><span>' + esc(o) + '</span></label>'; }).join('') + '</div>';
+      } else if (f.tipo === 'simnao') {
+        var r = (v && v.resposta) || '';
+        h += '<div class="maas-simnao">' + ['Sim', 'Não'].map(function (o) { return '<label class="' + (r === o ? 'on' : '') + '"><input type="radio" name="sn_' + esc(f.id) + '" data-xs="' + esc(f.id) + '" value="' + o + '"' + (r === o ? ' checked' : '') + '><span>' + o + '</span></label>'; }).join('') + '</div>' +
+          '<div class="maas-qual"' + (r === 'Sim' ? '' : ' hidden') + ' data-qualbox="' + esc(f.id) + '"><label class="maas-rot" style="margin-top:12px">' + esc(f.qual || 'Se sim, qual?') + '</label><textarea class="maas-area" rows="3" data-xq="' + esc(f.id) + '">' + esc((v && v.qual) || '') + '</textarea></div>';
+      } else if (f.tipo === 'eusou') {
+        var arr = Array.isArray(v) ? v : [];
+        h += '<ol class="maas-eusou">';
+        for (var k = 0; k < (f.linhas || 5); k++) h += '<li><span>Eu sou</span><input type="text" data-xl="' + esc(f.id) + '" data-k="' + k + '" value="' + esc(arr[k] || '') + '" aria-label="Eu sou, item ' + (k + 1) + '"></li>';
+        h += '</ol>';
+      }
+      return h + '</div>';
+    }
+    function telaExtra(x, p) {
+      var h = topo(barraGeral(p)) + '<section class="maas-tela' + (x.tipo === 'titulo' ? ' maas-so-titulo' : '') + '">';
+      if (x.tipo === 'perguntas') {
+        h += (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo menor">' + esc(x.titulo) + '</h1><div class="maas-filete"></div>';
+        if (x.intro) h += '<div class="maas-texto">' + texto(x.intro) + '</div>';
+        if (x.lista) h += '<ol class="maas-romano">' + x.lista.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ol>';
+        h += x.campos.map(function (f, i) { return campoExtra(f, i + 1); }).join('');
+        h += nav(p);
+      } else if (x.tipo === 'presente') {
+        var aberto = !!d.extra[x.id];
+        h += '<div class="maas-presente">' + (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo menor">' + esc(x.titulo) + '</h1>' +
+          '<button class="presente-btn' + (aberto ? ' aberto' : '') + '" data-presente="' + esc(x.id) + '" aria-expanded="' + aberto + '" aria-label="Abrir o presente">' + CAIXA + '</button>' +
+          '<p class="maas-texto pequeno presente-dica"' + (aberto ? ' hidden' : '') + '>' + esc(x.texto || 'Toque na caixa para abrir.') + '</p>' +
+          '<div class="presente-revela"' + (aberto ? '' : ' hidden') + '><p class="maas-rot">' + esc(x.revelacao.rotulo) + '</p><h2 class="maas-titulo menor">' + esc(x.revelacao.titulo) + '</h2><div class="maas-filete" style="margin:16px auto"></div><div class="maas-texto">' + texto(x.revelacao.texto) + '</div></div></div>';
+        h += nav(p);
+      } else if (x.tipo === 'titulo') {
+        h += '<span class="maas-estrela">✧</span>' + (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo">' + esc(x.titulo) + '</h1>' + (x.texto ? '<div class="maas-filete" style="margin:22px auto"></div><div class="maas-texto">' + texto(x.texto) + '</div>' : '');
+        h += nav(p);
+      } else if (x.tipo === 'agenda') {
+        h += (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo menor">' + esc(x.titulo) + '</h1><div class="maas-filete"></div>' +
+          (x.intro ? '<div class="maas-texto pequeno">' + texto(x.intro) + '</div>' : '') +
+          '<div class="maas-agenda">' + x.itens.map(function (it) {
+            return '<div class="ag-item"><div class="ag-cat">' + esc(it.categoria) + '</div><div class="ag-t">' + esc(it.atividade) + '</div>' +
+              (it.obs ? '<div class="ag-obs">' + texto(it.obs) + '</div>' : '') + (it.estrelas ? '<div class="ag-est">★ ' + esc(it.estrelas) + '</div>' : '') + '</div>';
+          }).join('') + '</div>';
+        h += nav(p);
+      }
+      return h + '</section>';
+    }
 
     function desenhar(rolar) {
-      var p = d.passo, h = '';
-      if (p <= 0) {
+      var p = d.passo, t = T[p], h = '';
+      if (t.k === 'abertura') {
         h = topo() + '<section class="maas-tela maas-abertura"><span class="maas-estrela">✧</span><p class="maas-rot">' + esc(c.abertura.rotulo) + '</p>' +
           '<h1 class="maas-titulo">' + esc(c.abertura.titulo) + '</h1><div class="maas-filete"></div><div class="maas-texto">' + texto(c.abertura.texto) + '</div>' +
-          '<button class="maas-btn" data-ir="1">' + esc(c.abertura.botao) + '</button></section>';
-      } else if (p === 1) {
+          '<button class="maas-btn" data-ir="' + (p + 1) + '">' + esc(c.abertura.botao) + '</button></section>';
+      } else if (t.k === 'extra') {
+        h = telaExtra(t.x, p);
+      } else if (t.k === 'intro') {
         var vid = c.intro.video ? videoEmbed(c.intro.video) : '';
-        h = topo() + '<section class="maas-tela"><h1 class="maas-titulo menor">' + esc(c.intro.titulo) + '</h1><div class="maas-filete"></div>' +
+        h = topo(barraGeral(p)) + '<section class="maas-tela"><h1 class="maas-titulo menor">' + esc(c.intro.titulo) + '</h1><div class="maas-filete"></div>' +
           '<div class="maas-texto">' + texto(c.intro.texto) + '</div>' +
           '<p class="maas-rot" style="margin-top:28px">COMO FUNCIONA</p><ol class="maas-passos">' +
-          c.intro.passos.map(function (t, i) { return '<li><span>' + (i + 1) + '</span>' + esc(t) + '</li>'; }).join('') + '</ol>' +
-          vid + '<div class="maas-nav"><button class="maas-btn leve" data-ir="0">← Voltar</button><button class="maas-btn" data-ir="2">' + esc(c.intro.botao) + '</button></div></section>';
-      } else if (p >= 2 && p < 2 + NP) {
-        var i = p - 2, pl = c.pilares[i];
-        h = topo(barraPilares(i)) + '<section class="maas-tela maas-pilar">' +
+          c.intro.passos.map(function (tx, i) { return '<li><span>' + (i + 1) + '</span>' + esc(tx) + '</li>'; }).join('') + '</ol>' +
+          vid + nav(p, esc(c.intro.botao)) + '</section>';
+      } else if (t.k === 'pilar') {
+        var i = t.i, pl = c.pilares[i];
+        h = topo('<div class="maas-prog" aria-label="Pilar ' + (i + 1) + ' de ' + NP + '"><div style="width:' + ((i + 1) / NP * 100) + '%"></div></div>') + '<section class="maas-tela maas-pilar">' +
           '<div class="maas-cab"><div><p class="maas-rot">PILAR ' + (i + 1) + ' DE ' + NP + '</p><h1 class="maas-titulo">' + esc(pl.nome) + '</h1></div>' +
           '<div class="maas-mini" aria-hidden="true">' + radar(d.notas, { tamanho: 120, mini: true, destaque: i }) + '</div></div>' +
           '<div class="maas-filete"></div><div class="maas-texto">' + texto(pl.texto) + '</div>' +
@@ -118,10 +202,9 @@ var MAAS = (function () {
           '<textarea id="refl" class="maas-area" rows="5" data-refl="' + i + '" placeholder="Escreva o que vier.">' + esc(d.reflexoes[i] || '') + '</textarea>' +
           '<p class="maas-rot" style="margin-top:22px">SUA NOTA PARA ' + esc(pl.nome.toUpperCase()) + '</p>' + slider(i, true) +
           '<div class="maas-escala"><span>0 · abandonado</span><span>10 · pleno</span></div>' +
-          '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (p - 1) + '">' + (i ? '← Pilar anterior' : '← Voltar') + '</button>' +
-          '<button class="maas-btn" data-ir="' + (p + 1) + '">' + (i < NP - 1 ? 'Próximo pilar →' : 'Ver minha roda →') + '</button></div></section>';
-      } else if (p === 2 + NP || p === 5 + NP) {
-        var depois = p === 5 + NP;
+          nav(p, i < NP - 1 ? 'Próximo pilar →' : 'Ver minha roda →', i ? '← Pilar anterior' : '← Voltar') + '</section>';
+      } else if (t.k === 'roda' || t.k === 'salvo') {
+        var depois = t.k === 'salvo';
         h = topo() + '<section class="maas-tela">' +
           (depois ? '<div class="maas-salvo">' + texto(c.compromisso.salvo) + '</div>' : '') +
           '<h1 class="maas-titulo menor">' + esc(c.roda.titulo) + '</h1><div class="maas-filete"></div>' +
@@ -130,12 +213,12 @@ var MAAS = (function () {
           (ultimaAnterior() ? '<p class="maas-comp"><span class="c-ant"></span> MAAS anterior <span class="c-atu"></span> hoje</p>' : '') +
           '<ul class="maas-lista">' + nm.map(function (nome, k) { return '<li><span class="n">' + (k + 1) + '</span><span class="t">' + esc(nome) + '</span>' + slider(k) + '</li>'; }).join('') + '</ul></div>' +
           '<div class="maas-texto destaque">' + texto(c.roda.texto) + '</div>' +
-          '<div class="maas-nav">' + (depois ? '<a class="maas-btn leve" href="#">← Voltar para a trilha</a><button class="maas-btn" data-ir="' + (3 + NP) + '">Rever leitura</button>'
-                                             : '<button class="maas-btn leve" data-ir="' + (1 + NP) + '">← Pilar ' + NP + '</button><button class="maas-btn" data-ir="' + (3 + NP) + '">Continuar →</button>') + '</div></section>';
-      } else if (p === 3 + NP) {
+          (depois ? '<div class="maas-nav"><a class="maas-btn leve" href="#">← Voltar para a trilha</a><button class="maas-btn" data-ir="' + idx(T, 'leitura') + '">Rever a sessão</button></div>'
+                  : nav(p, 'Continuar →', '← Pilar ' + NP)) + '</section>';
+      } else if (t.k === 'leitura') {
         if (!Array.isArray(d.prioridades)) { d.prioridades = menores3(d.notas); salvarLogo(); }
         var baixos = menores3(d.notas);
-        h = topo() + '<section class="maas-tela"><h1 class="maas-titulo menor">' + esc(c.leitura.titulo) + '</h1><div class="maas-filete"></div>' +
+        h = topo(barraGeral(p)) + '<section class="maas-tela"><h1 class="maas-titulo menor">' + esc(c.leitura.titulo) + '</h1><div class="maas-filete"></div>' +
           c.leitura.perguntas.map(function (q, k) {
             return '<label class="maas-q"><span class="maas-num">' + (k + 1) + '</span><span class="maas-qt">' + esc(q) + '</span></label><textarea class="maas-area" rows="3" data-leit="' + k + '">' + esc(d.leitura[k] || '') + '</textarea>';
           }).join('') +
@@ -144,14 +227,13 @@ var MAAS = (function () {
             var on = d.prioridades.indexOf(k) >= 0;
             return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-prior="' + k + '"' + (on ? ' checked' : '') + '><span>' + (k + 1) + '. ' + esc(nome) + '</span><b>' + d.notas[k] + '</b>' + (baixos.indexOf(k) >= 0 ? '<i>menor nota</i>' : '') + '</label>';
           }).join('') + '</div>' +
-          '<blockquote class="maas-frase">' + esc(c.leitura.frase) + '</blockquote>' +
-          '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (2 + NP) + '">← Minha roda</button><button class="maas-btn" data-ir="' + (4 + NP) + '">Continuar →</button></div></section>';
+          '<blockquote class="maas-frase">' + esc(c.leitura.frase) + '</blockquote>' + nav(p, 'Continuar →', '← Minha roda') + '</section>';
       } else {
-        h = topo() + '<section class="maas-tela"><h1 class="maas-titulo menor">' + esc(c.compromisso.titulo) + '</h1><div class="maas-filete"></div>' +
+        h = topo(barraGeral(p)) + '<section class="maas-tela"><h1 class="maas-titulo menor">' + esc(c.compromisso.titulo) + '</h1><div class="maas-filete"></div>' +
           '<label class="maas-q"><span class="maas-qt">' + esc(c.compromisso.pergunta) + '</span></label>' +
           '<textarea class="maas-area" rows="4" data-atitude>' + esc(d.atitude || '') + '</textarea>' +
           (d.prioridades && d.prioridades.length ? '<p class="maas-texto pequeno">Seus pilares prioritários: <b>' + d.prioridades.map(function (k) { return esc(nm[k]); }).join(', ') + '</b></p>' : '') +
-          '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (3 + NP) + '">← Voltar</button><button class="maas-btn" id="bSalvarMaas">' + esc(c.compromisso.botao) + '</button></div></section>';
+          '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (p - 1) + '">← Voltar</button><button class="maas-btn" id="bSalvarMaas">' + esc(c.compromisso.botao) + '</button></div></section>';
       }
       raiz.innerHTML = '<div class="maas">' + h + '<div class="maas-status" id="salvo" role="status"></div></div>';
       if (rolar) window.scrollTo(0, 0);
@@ -180,6 +262,38 @@ var MAAS = (function () {
       $$('[data-refl]', raiz).forEach(function (t) { t.oninput = function () { d.reflexoes[Number(t.getAttribute('data-refl'))] = t.value; salvarLogo(); }; });
       $$('[data-leit]', raiz).forEach(function (t) { t.oninput = function () { d.leitura[Number(t.getAttribute('data-leit'))] = t.value; salvarLogo(); }; });
       $$('[data-atitude]', raiz).forEach(function (t) { t.oninput = function () { d.atitude = t.value; salvarLogo(); }; });
+      $$('[data-x]', raiz).forEach(function (t) { t.oninput = function () { d.extra[t.getAttribute('data-x')] = t.value; salvarLogo(); }; });
+      $$('[data-xm]', raiz).forEach(function (cb) {
+        cb.onchange = function () {
+          var id = cb.getAttribute('data-xm');
+          d.extra[id] = $$('[data-xm="' + id + '"]:checked', raiz).map(function (x) { return x.value; });
+          cb.parentNode.classList.toggle('on', cb.checked); salvarLogo();
+        };
+      });
+      $$('[data-xs]', raiz).forEach(function (rb) {
+        rb.onchange = function () {
+          var id = rb.getAttribute('data-xs'), v = d.extra[id] || {};
+          v.resposta = rb.value; d.extra[id] = v;
+          $$('[data-xs="' + id + '"]', raiz).forEach(function (x) { x.parentNode.classList.toggle('on', x.checked); });
+          $('[data-qualbox="' + id + '"]', raiz).hidden = rb.value !== 'Sim';
+          salvarLogo();
+        };
+      });
+      $$('[data-xq]', raiz).forEach(function (t) { t.oninput = function () { var id = t.getAttribute('data-xq'), v = d.extra[id] || {}; v.qual = t.value; d.extra[id] = v; salvarLogo(); }; });
+      $$('[data-xl]', raiz).forEach(function (t) {
+        t.oninput = function () {
+          var id = t.getAttribute('data-xl'), arr = Array.isArray(d.extra[id]) ? d.extra[id] : [];
+          arr[Number(t.getAttribute('data-k'))] = t.value; d.extra[id] = arr; salvarLogo();
+        };
+      });
+      $$('[data-presente]', raiz).forEach(function (b) {
+        b.onclick = function () {
+          d.extra[b.getAttribute('data-presente')] = true; salvarLogo();
+          b.classList.add('aberto'); b.setAttribute('aria-expanded', 'true');
+          var dica = $('.presente-dica', raiz); if (dica) dica.hidden = true;
+          var rv = $('.presente-revela', raiz); rv.hidden = false; rv.classList.add('sobe');
+        };
+      });
       $$('[data-prior]', raiz).forEach(function (cb) {
         cb.onchange = function () {
           var k = Number(cb.getAttribute('data-prior'));
@@ -194,7 +308,7 @@ var MAAS = (function () {
       var g = $('#rodaGrande', raiz);
       if (g) g.onclick = function (e) { var t = e.target.closest('[data-i]'); if (t) legendaPara(Number(t.getAttribute('data-i'))); };
       var bs = $('#bSalvarMaas', raiz);
-      if (bs) bs.onclick = function () { d.concluido_em = new Date().toISOString(); ir(5 + NP); };
+      if (bs) bs.onclick = function () { d.concluido_em = new Date().toISOString(); ir(idx(T, 'salvo')); };
     }
     function legendaPara(i) {
       var l = $('#legenda', raiz);
@@ -213,15 +327,24 @@ var MAAS = (function () {
   }
 
   /* ---------- leitura para a mentora ---------- */
+  function respExtra(f, v) {
+    if (f.tipo === 'simnao') return v && v.resposta ? '<div class="resposta">' + esc(v.resposta) + (v.qual ? ' — ' + texto(v.qual) : '') + '</div>' : resp('');
+    if (f.tipo === 'marcar') return Array.isArray(v) && v.length ? '<div class="resposta">' + v.map(esc).join(' · ') + '</div>' : resp('');
+    if (f.tipo === 'eusou') { var a = (Array.isArray(v) ? v : []).filter(preenchido); return a.length ? '<div class="resposta">' + a.map(function (x) { return 'Eu sou ' + esc(x); }).join('<br>') + '</div>' : resp(''); }
+    return resp(v);
+  }
+  function blocoExtras(lista, d) {
+    return (lista || []).filter(function (x) { return x.tipo === 'perguntas'; }).map(function (x) {
+      return '<h4>' + esc(x.titulo) + '</h4>' + x.campos.map(function (f) { return '<p class="rotulo-peq">' + texto(f.rotulo) + '</p>' + respExtra(f, d.extra[f.id]); }).join('');
+    }).join('');
+  }
   function leitura(ex, dados) {
     var c = ex.conteudo, nm = nomes(c);
-    if (!dados) return '<div class="resposta vazio">Ainda não começou o MAAS.</div>';
-    var d = completar(c, dados), ant = (d.historico || []).length ? d.historico[d.historico.length - 1] : null;
-    var NP = nm.length, passo = d.passo || 0;
-    var onde = d.concluido_em ? 'concluído em ' + new Date(d.concluido_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-      : passo < 2 ? 'na abertura' : passo < 2 + NP ? 'no pilar ' + (passo - 1) + ' de ' + NP : passo === 2 + NP ? 'vendo a roda' : passo === 3 + NP ? 'na leitura da roda' : 'no compromisso';
-    var h = '<div class="maas-adm"><p class="miudo" style="margin-bottom:8px">Status: <b>' + status(dados) + '</b> · ' + onde + '</p>' +
-      '<div class="maas-adm-grade"><div class="maas-adm-roda">' + radar(d.notas, { nomes: nm, anterior: ant ? ant.notas : null }) +
+    if (!dados) return '<div class="resposta vazio">Ainda não começou a sessão.</div>';
+    var d = completar(c, JSON.parse(JSON.stringify(dados))), ant = (d.historico || []).length ? d.historico[d.historico.length - 1] : null;
+    var h = '<div class="maas-adm"><p class="miudo" style="margin-bottom:8px">Status: <b>' + status(dados) + '</b> · ' + esc(onde(c, d).texto) + '</p>';
+    h += blocoExtras(c.antes, d);
+    h += '<h4>Roda do MAAS</h4><div class="maas-adm-grade"><div class="maas-adm-roda">' + radar(d.notas, { nomes: nm, anterior: ant ? ant.notas : null }) +
       (ant ? '<p class="maas-comp"><span class="c-ant"></span> ' + new Date(ant.em).toLocaleDateString('pt-BR') + ' <span class="c-atu"></span> atual</p>' : '') + '</div>' +
       '<table class="maas-adm-notas">' + nm.map(function (n, k) {
         var pr = (d.prioridades || []).indexOf(k) >= 0;
@@ -231,9 +354,10 @@ var MAAS = (function () {
     h += '<h4>Reflexões por pilar</h4>' + (refl || '<div class="resposta vazio">nenhuma reflexão escrita</div>');
     h += '<h4>Leitura da roda</h4>' + c.leitura.perguntas.map(function (q, k) { return '<p class="rotulo-peq">' + esc(q) + '</p>' + resp(d.leitura[k]); }).join('');
     h += '<h4>Pilares prioritários</h4>' + (d.prioridades && d.prioridades.length ? '<p>' + d.prioridades.map(function (k) { return esc(nm[k]); }).join(' · ') + '</p>' : '<div class="resposta vazio">ainda não escolheu</div>');
+    h += blocoExtras(c.depois, d);
     h += '<h4>Atitude da semana</h4>' + resp(d.atitude);
     return h + '</div>';
   }
 
-  return { radar: radar, montar: montar, leitura: leitura, status: status, completar: completar };
+  return { radar: radar, montar: montar, leitura: leitura, status: status, completar: completar, onde: onde };
 })();

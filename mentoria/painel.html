@@ -167,9 +167,9 @@
       gente.forEach(function (a) {
         var r = respostas[chave(a.email, e.id)], corpo = '';
         if (ehMaas(e) && r) {
-          var d = MAAS.completar(e.conteudo, JSON.parse(JSON.stringify(r.dados))), NP = e.conteudo.pilares.length, ps = d.passo || 0;
-          corpo = MAAS.radar(d.notas, { tamanho: 200, mini: true, destaque: ps >= 2 && ps < 2 + NP ? ps - 2 : undefined }) +
-            '<div class="st" style="text-align:center">' + (d.concluido_em ? 'concluída' : ps < 2 ? 'na abertura' : ps < 2 + NP ? 'pilar ' + (ps - 1) + ' de ' + NP + ' · ' + esc(e.conteudo.pilares[ps - 2].nome) : 'leitura da roda') + '</div>';
+          var d = MAAS.completar(e.conteudo, JSON.parse(JSON.stringify(r.dados))), o = MAAS.onde(e.conteudo, d);
+          corpo = MAAS.radar(d.notas, { tamanho: 200, mini: true, destaque: o.pilar }) +
+            '<div class="st" style="text-align:center">' + esc(o.texto) + '</div>';
         } else if (r) {
           corpo = '<div class="res">' + camposResumo(e, r.dados) + '</div>';
         }
