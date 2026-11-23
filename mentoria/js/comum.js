@@ -51,8 +51,11 @@ function quando(iso) {
    escala     { id, tipo:'escala', rotulo, min:0, max:10, rotuloMin, rotuloMax }
    marcar     { id, tipo:'marcar', rotulo, opcoes:[...] }  várias opções
    escolha    { id, tipo:'escolha', rotulo, opcoes:[...] } uma opção
-   lista      { id, tipo:'lista', rotulo, linhas:5 }     itens numerados
+   lista      { id, tipo:'lista', rotulo, linhas:5, prefixo:'Eu sou' }  itens numerados
+              (prefixo é opcional: aparece antes de cada linha)
    foto       { id, tipo:'foto', rotulo, max:3 }          envio de fotos
+   Opcional no topo: conteudo.capa = { imagem, titulo, autor, detalhe }
+   mostra a capa de um livro ou filme antes da introdução.
 -------------------------------------------------------------------- */
 function camposRespondiveis(conteudo) {
   return ((conteudo && conteudo.campos) || []).filter(function (c) { return c.tipo !== 'info' && c.id; });
@@ -73,6 +76,10 @@ function progresso(conteudo, dados) {
 function htmlCampos(conteudo, dados, leitura) {
   dados = dados || {};
   var h = '';
+  var cp = conteudo && conteudo.capa;
+  if (cp) h += '<div class="capa-ex">' + (cp.imagem ? '<img src="' + esc(cp.imagem) + '" alt="Capa de ' + esc(cp.titulo || '') + '">' : '') +
+    '<div><b>' + esc(cp.titulo || '') + '</b>' + (cp.autor ? '<span class="autor">' + esc(cp.autor) + '</span>' : '') +
+    (cp.detalhe ? '<span class="detalhe">' + texto(cp.detalhe) + '</span>' : '') + '</div></div>';
   if (conteudo && conteudo.intro) h += '<div class="intro">' + texto(conteudo.intro) + '</div>';
   ((conteudo && conteudo.campos) || []).forEach(function (c, i) {
     var v = dados[c.id], nome = 'c_' + i;
@@ -112,10 +119,13 @@ function htmlCampos(conteudo, dados, leitura) {
                  : '<label class="btn leve peq enviar-foto"><input type="file" accept="image/*" hidden><span> Enviar foto</span></label>') + '</div>';
     } else if (c.tipo === 'lista') {
       var linhas = c.linhas || 5, arr = Array.isArray(v) ? v : [];
-      h += '<ol class="lista">';
+      var pre = c.prefixo ? '<span class="prefixo">' + esc(c.prefixo) + '</span> ' : '';
+      if (c.linhas > 10) h += '<p class="ajuda conta">' + arr.filter(function (x) { return String(x || '').trim(); }).length + ' de ' + linhas + '</p>';
+      h += '<ol class="lista' + (c.prefixo ? ' com-prefixo' : '') + '">';
       for (var k = 0; k < linhas; k++) {
-        h += leitura ? '<li>' + (preenchido(arr[k]) ? esc(arr[k]) : '<span class="vazio">—</span>') + '</li>'
-                     : '<li><input type="text" value="' + esc(arr[k] || '') + '" aria-label="Item ' + (k + 1) + '"></li>';
+        var num = c.prefixo ? '<span class="n">' + (k + 1) + '.</span>' : '';
+        h += leitura ? '<li>' + num + (preenchido(arr[k]) ? '<span>' + pre + esc(arr[k]) + '</span>' : '<span class="vazio">—</span>') + '</li>'
+                     : '<li>' + num + pre + '<input type="text" value="' + esc(arr[k] || '') + '" aria-label="' + esc((c.prefixo ? c.prefixo + ', ' : '') + 'item ' + (k + 1)) + '"></li>';
       }
       h += '</ol>';
     }
@@ -145,7 +155,15 @@ function lerCampos(raiz) {
 
 /* Liga os cliques e digitação; chama aoMudar() a cada mudança */
 function ligarCampos(raiz, aoMudar) {
-  raiz.addEventListener('input', function (e) { if (e.target.type !== 'file') aoMudar(); });
+  raiz.addEventListener('input', function (e) {
+    if (e.target.type === 'file') return;
+    var q = e.target.closest('.q'), conta = q && $('.conta', q);
+    if (conta) {
+      var ins = $$('ol.lista input', q);
+      conta.textContent = ins.filter(function (i) { return i.value.trim(); }).length + ' de ' + ins.length;
+    }
+    aoMudar();
+  });
   raiz.addEventListener('change', function (e) { if (e.target.type !== 'file') aoMudar(); });
   raiz.addEventListener('click', function (e) {
     var b = e.target.closest('.escala button');

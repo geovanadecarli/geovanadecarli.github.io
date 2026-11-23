@@ -90,6 +90,17 @@ body.ceu{background:var(--roxo) radial-gradient(ellipse at 85% -10%,var(--roxo-2
 .op.on{background:var(--ouro-claro);border-color:var(--ouro);cursor:default}
 .lista{padding-left:22px;display:grid;gap:6px}
 .lista li::marker{color:var(--suave)}
+.lista.com-prefixo{list-style:none;padding-left:0}
+.lista.com-prefixo li{display:flex;align-items:center;gap:8px}
+.lista .n{min-width:24px;text-align:right;color:var(--suave);font-size:14px;flex:none}
+.lista.com-prefixo input{flex:1;min-width:0}
+.conta{text-align:right}
+.prefixo{font-weight:500;color:var(--roxo);white-space:nowrap}
+.capa-ex{display:flex;gap:14px;align-items:center;margin-bottom:14px}
+.capa-ex img{width:84px;border-radius:6px;box-shadow:0 8px 18px rgba(42,22,64,.22);flex:none}
+.capa-ex b{display:block;font:600 22px/1.15 'Cormorant Garamond',Georgia,serif;color:var(--roxo)}
+.capa-ex .autor{display:block;font-weight:500;margin-top:4px}
+.capa-ex .detalhe{display:block;font-size:13px;color:var(--suave);margin-top:2px}
 .salvo{font:500 19px/1 Caveat,cursive;color:var(--ouro-escuro);text-align:right;min-height:22px;margin-top:-4px}
 .salvo.erro{color:#A3283A;font:500 14px Jost,sans-serif}
 .comentario{background:var(--roxo);color:var(--lilas-claro);border-radius:16px;padding:14px 16px;margin:16px 0 4px}
