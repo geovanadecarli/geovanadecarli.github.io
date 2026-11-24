@@ -3,20 +3,30 @@
    Os textos ficam no banco (exercicios.conteudo). Aqui só o funcionamento.
    Telas: abertura → antes[] → intro MAAS → 11 pilares → roda → leitura
           → depois[] → compromisso → salvo
-   Tipos de tela em antes/depois: perguntas · presente · titulo · agenda
+   Tipos de tela em antes/depois: perguntas · presente · titulo · agenda · audio
    Tipos de campo em "perguntas": paragrafo · marcar · simnao · eusou
+     (eusou com "porque": true pede "Eu sou…" e "Por quê?" em cada linha)
+   Pilar: texto, perguntas, grupos[{nome,perguntas}], partes[{nome,texto}]
+          (nota do pilar = média das partes), saibaMais{titulo,texto}, frase
+   Leitura: c.leitura.telas[] = {tipo:'pergunta', i, pergunta, exemplo}
+            ou {tipo:'prioridades', titulo, texto, frase} (uma por tela)
    ===================================================================== */
 var MAAS = (function () {
   var OURO = '#B8924A', ROXO_CLARO = '#CBBEDB';
 
   function nomes(c) { return (c.pilares || []).map(function (p) { return p.nome; }); }
+  function num(v) { return String(Math.round((Number(v) || 0) * 10) / 10).replace('.', ','); }
+  function media(arr) {
+    var a = (arr || []).map(Number).filter(function (x) { return !isNaN(x); });
+    return a.length ? Math.round(a.reduce(function (s, x) { return s + x; }, 0) / a.length * 10) / 10 : 0;
+  }
   function vazio(c) {
     var n = (c.pilares || []).length;
-    return { passo: 0, notas: Array(n).fill(0), reflexoes: Array(n).fill(''), leitura: ['', '', '', ''], prioridades: null, atitude: '', extra: {}, concluido_em: null, historico: [] };
+    return { passo: 0, notas: Array(n).fill(0), reflexoes: Array(n).fill(''), leitura: ['', '', '', '', ''], prioridades: null, atitude: '', extra: {}, parciais: {}, grupos: {}, concluido_em: null, historico: [] };
   }
   function completar(c, d) {
     var v = vazio(c); d = d || {};
-    Object.keys(v).forEach(function (k) { if (d[k] === undefined || d[k] === null && k === 'extra') d[k] = v[k]; });
+    Object.keys(v).forEach(function (k) { if (d[k] === undefined || d[k] === null && (k === 'extra' || k === 'parciais' || k === 'grupos')) d[k] = v[k]; });
     return d;
   }
   function status(d) {
@@ -32,7 +42,9 @@ var MAAS = (function () {
     (c.antes || []).forEach(function (x) { t.push({ k: 'extra', x: x }); });
     t.push({ k: 'intro' });
     (c.pilares || []).forEach(function (p, i) { t.push({ k: 'pilar', i: i }); });
-    t.push({ k: 'roda' }, { k: 'leitura' });
+    t.push({ k: 'roda' });
+    if (c.leitura && c.leitura.telas) c.leitura.telas.forEach(function (x, j) { t.push({ k: 'leitura', j: j }); });
+    else t.push({ k: 'leitura' });
     (c.depois || []).forEach(function (x) { t.push({ k: 'extra', x: x }); });
     t.push({ k: 'compromisso' }, { k: 'salvo' });
     return t;
@@ -46,6 +58,7 @@ var MAAS = (function () {
     if (t.k === 'pilar') return { texto: 'pilar ' + (t.i + 1) + ' de ' + c.pilares.length + ' · ' + c.pilares[t.i].nome, pilar: t.i };
     var nomesT = { abertura: 'na abertura', intro: 'lendo sobre o MAAS', roda: 'vendo a roda', leitura: 'na leitura da roda', compromisso: 'no compromisso', salvo: 'concluída' };
     if (t.k === 'extra') return { texto: t.x.titulo || 'em andamento' };
+    if (t.k === 'leitura' && t.j != null) return { texto: 'na leitura da roda · ' + (t.j + 1) + ' de ' + c.leitura.telas.length };
     return { texto: nomesT[t.k] || 'em andamento' };
   }
 
@@ -122,8 +135,14 @@ var MAAS = (function () {
     }
     function slider(i, grande) {
       return '<div class="maas-nota' + (grande ? ' grande' : '') + '"><input type="range" min="0" max="10" step="1" value="' + (d.notas[i] || 0) + '" data-i="' + i + '" aria-label="Nota de 0 a 10 para ' + esc(nm[i]) + '"' +
-        ' style="--p:' + ((d.notas[i] || 0) * 10) + '%"><output data-i="' + i + '">' + (d.notas[i] || 0) + '</output></div>';
+        ' style="--p:' + ((d.notas[i] || 0) * 10) + '%"><output data-i="' + i + '">' + num(d.notas[i]) + '</output></div>';
     }
+    function sliderParte(i, k, nome) {
+      var v = ((d.parciais[i] || [])[k]) || 0;
+      return '<div class="maas-nota"><input type="range" min="0" max="10" step="1" value="' + v + '" data-i="' + i + '" data-parte="' + k + '" aria-label="Nota de 0 a 10 para ' + esc(nome) + '"' +
+        ' style="--p:' + (v * 10) + '%"><output data-parte-out="' + i + '-' + k + '">' + v + '</output></div>';
+    }
+    function whats(msg) { return 'https://wa.me/' + ((window.CONFIG && CONFIG.whatsapp) || '') + '?text=' + encodeURIComponent(msg || ''); }
     function nav(p, proxTexto, voltaTexto) {
       return '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (p - 1) + '">' + (voltaTexto || '← Voltar') + '</button><button class="maas-btn" data-ir="' + (p + 1) + '">' + (proxTexto || 'Continuar →') + '</button></div>';
     }
@@ -138,6 +157,15 @@ var MAAS = (function () {
         var r = (v && v.resposta) || '';
         h += '<div class="maas-simnao">' + ['Sim', 'Não'].map(function (o) { return '<label class="' + (r === o ? 'on' : '') + '"><input type="radio" name="sn_' + esc(f.id) + '" data-xs="' + esc(f.id) + '" value="' + o + '"' + (r === o ? ' checked' : '') + '><span>' + o + '</span></label>'; }).join('') + '</div>' +
           '<div class="maas-qual"' + (r === 'Sim' ? '' : ' hidden') + ' data-qualbox="' + esc(f.id) + '"><label class="maas-rot" style="margin-top:12px">' + esc(f.qual || 'Se sim, qual?') + '</label><textarea class="maas-area" rows="3" data-xq="' + esc(f.id) + '">' + esc((v && v.qual) || '') + '</textarea></div>';
+      } else if (f.tipo === 'eusou' && f.porque) {
+        var arrP = Array.isArray(v) ? v : [];
+        h += '<ol class="maas-eusou porque">';
+        for (var kp = 0; kp < (f.linhas || 10); kp++) {
+          var it = arrP[kp] || {};
+          h += '<li><span class="maas-num">' + (kp + 1) + '</span><div class="ep"><div class="ep-l"><span>Eu sou</span><input type="text" data-xp="' + esc(f.id) + '" data-k="' + kp + '" data-c="eu" value="' + esc(it.eu || '') + '" aria-label="Eu sou, item ' + (kp + 1) + '"></div>' +
+            '<div class="ep-l por"><span>Por quê?</span><input type="text" data-xp="' + esc(f.id) + '" data-k="' + kp + '" data-c="porque" value="' + esc(it.porque || '') + '" aria-label="Por quê, item ' + (kp + 1) + '"></div></div></li>';
+        }
+        h += '</ol>';
       } else if (f.tipo === 'eusou') {
         var arr = Array.isArray(v) ? v : [];
         h += '<ol class="maas-eusou">';
@@ -152,8 +180,20 @@ var MAAS = (function () {
         h += (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo menor">' + esc(x.titulo) + '</h1><div class="maas-filete"></div>';
         if (x.intro) h += '<div class="maas-texto">' + texto(x.intro) + '</div>';
         if (x.lista) h += '<ol class="maas-romano">' + x.lista.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ol>';
-        h += x.campos.map(function (f, i) { return campoExtra(f, i + 1); }).join('');
+        h += x.campos.map(function (f, i) { return campoExtra(f, x.campos.length > 1 ? i + 1 : ''); }).join('');
+        if (x.dica) h += '<p class="maas-texto pequeno" style="margin-top:14px">' + texto(x.dica) + '</p>';
         h += nav(p);
+      } else if (x.tipo === 'audio') {
+        var ouviu = !!d.extra[x.id];
+        h += (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo menor">' + esc(x.titulo) + '</h1><div class="maas-filete"></div>' +
+          '<div class="maas-texto">' + texto(x.preparo || '') + '</div>' +
+          (x.frase ? '<p class="maas-texto destaque">' + esc(x.frase) + '</p>' : '') +
+          '<div class="maas-ceu">' + (x.audio
+            ? '<audio controls preload="metadata" src="' + esc(x.audio) + '" data-audio="' + esc(x.id) + '"></audio>'
+            : '<p>' + esc(x.semAudio || 'O áudio chega em breve.') + '</p>') + '</div>' +
+          '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (p - 1) + '">← Voltar</button>' +
+          '<button class="maas-btn" data-ir="' + (p + 1) + '" id="bPosAudio"' + (x.audio && !ouviu ? ' hidden' : '') + '>Continuar →</button></div>' +
+          (x.audio && !ouviu ? '<p class="maas-texto pequeno" id="dicaAudio" style="text-align:center">O botão Continuar aparece quando o áudio terminar.</p>' : '');
       } else if (x.tipo === 'presente') {
         var aberto = !!d.extra[x.id];
         h += '<div class="maas-presente">' + (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo menor">' + esc(x.titulo) + '</h1>' +
@@ -169,7 +209,9 @@ var MAAS = (function () {
           (x.intro ? '<div class="maas-texto pequeno">' + texto(x.intro) + '</div>' : '') +
           '<div class="maas-agenda">' + x.itens.map(function (it) {
             return '<div class="ag-item"><div class="ag-cat">' + esc(it.categoria) + '</div><div class="ag-t">' + esc(it.atividade) + '</div>' +
-              (it.obs ? '<div class="ag-obs">' + texto(it.obs) + '</div>' : '') + (it.estrelas ? '<div class="ag-est">★ ' + esc(it.estrelas) + '</div>' : '') + '</div>';
+              (it.obs ? '<div class="ag-obs">' + texto(it.obs) + '</div>' : '') + (it.estrelas ? '<div class="ag-est">★ ' + esc(it.estrelas) + '</div>' : '') +
+              ((it.link || it.whats) ? '<div class="ag-acoes">' + (it.link ? '<a class="ag-link" href="' + esc(it.link) + '">' + esc(it.linkTexto || 'Abrir aqui') + ' →</a>' : '') +
+                (it.whats ? '<a class="ag-whats" target="_blank" rel="noopener" href="' + esc(whats(it.whats)) + '">Enviar no WhatsApp</a>' : '') + '</div>' : '') + '</div>';
           }).join('') + '</div>';
         h += nav(p);
       }
@@ -181,6 +223,9 @@ var MAAS = (function () {
       if (t.k === 'abertura') {
         h = topo() + '<section class="maas-tela maas-abertura"><span class="maas-estrela">✧</span><p class="maas-rot">' + esc(c.abertura.rotulo) + '</p>' +
           '<h1 class="maas-titulo">' + esc(c.abertura.titulo) + '</h1><div class="maas-filete"></div><div class="maas-texto">' + texto(c.abertura.texto) + '</div>' +
+          (c.abertura.aviso ? '<p class="maas-aviso">' + texto(c.abertura.aviso) + '</p>' : '') +
+          (c.abertura.lista ? '<div class="maas-paravoce"><p class="maas-rot">' + esc(c.abertura.listaTitulo || '') + '</p><ol class="maas-romano">' +
+            c.abertura.lista.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ol></div>' : '') +
           '<button class="maas-btn" data-ir="' + (p + 1) + '">' + esc(c.abertura.botao) + '</button></section>';
       } else if (t.k === 'extra') {
         h = telaExtra(t.x, p);
@@ -196,13 +241,64 @@ var MAAS = (function () {
         h = topo('<div class="maas-prog" aria-label="Pilar ' + (i + 1) + ' de ' + NP + '"><div style="width:' + ((i + 1) / NP * 100) + '%"></div></div>') + '<section class="maas-tela maas-pilar">' +
           '<div class="maas-cab"><div><p class="maas-rot">PILAR ' + (i + 1) + ' DE ' + NP + '</p><h1 class="maas-titulo">' + esc(pl.nome) + '</h1></div>' +
           '<div class="maas-mini" aria-hidden="true">' + radar(d.notas, { tamanho: 120, mini: true, destaque: i }) + '</div></div>' +
-          '<div class="maas-filete"></div><div class="maas-texto">' + texto(pl.texto) + '</div>' +
-          '<ol class="maas-perguntas">' + pl.perguntas.map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ol>' +
-          '<label class="maas-rot" for="refl">MINHAS REFLEXÕES <span style="letter-spacing:0;text-transform:none;font-weight:400">· opcional</span></label>' +
+          '<div class="maas-filete"></div>' +
+          (c.regras ? '<ul class="maas-regras">' + c.regras.map(function (r) { return '<li>' + texto(r) + '</li>'; }).join('') + '</ul>' : '') +
+          (pl.texto ? '<div class="maas-texto">' + texto(pl.texto) + '</div>' : '') +
+          (pl.perguntas && pl.perguntas.length ? '<ol class="maas-perguntas">' + pl.perguntas.map(function (q) { return '<li>' + texto(q) + '</li>'; }).join('') + '</ol>' : '') +
+          (pl.grupos ? '<p class="maas-rot" style="margin-top:20px">' + esc(pl.gruposTitulo || 'Escolha o seu caso') + '</p><div class="maas-grupos">' + pl.grupos.map(function (g, gi) {
+            var on = d.grupos[i] === gi;
+            return '<label class="maas-grupo' + (on ? ' on' : '') + '"><span class="g-top"><input type="radio" name="grupo_' + i + '" data-grupo="' + i + '" value="' + gi + '"' + (on ? ' checked' : '') + '><b>' + esc(g.nome) + '</b></span>' +
+              '<ul>' + g.perguntas.map(function (q) { return '<li>' + texto(q) + '</li>'; }).join('') + '</ul></label>';
+          }).join('') + '</div>' : '') +
+          (pl.saibaMais ? '<details class="maas-saiba"><summary>' + esc(pl.saibaMais.titulo || 'Saiba mais') + '</summary><div class="maas-texto pequeno">' + texto(pl.saibaMais.texto) + '</div></details>' : '') +
+          (pl.frase ? '<p class="maas-texto destaque">' + texto(pl.frase) + '</p>' : '') +
+          '<label class="maas-rot" for="refl" style="margin-top:24px">' + esc((c.reflexao && c.reflexao.rotulo) || 'MINHAS REFLEXÕES') + '</label>' +
+          (c.reflexao && c.reflexao.ajuda ? '<p class="maas-texto pequeno" style="margin:4px 0 0">' + esc(c.reflexao.ajuda) + '</p>' : '') +
           '<textarea id="refl" class="maas-area" rows="5" data-refl="' + i + '" placeholder="Escreva o que vier.">' + esc(d.reflexoes[i] || '') + '</textarea>' +
-          '<p class="maas-rot" style="margin-top:22px">SUA NOTA PARA ' + esc(pl.nome.toUpperCase()) + '</p>' + slider(i, true) +
-          '<div class="maas-escala"><span>0 · abandonado</span><span>10 · pleno</span></div>' +
+          (pl.partes
+            ? '<p class="maas-rot" style="margin-top:22px">SUAS NOTAS PARA ' + esc(pl.nome.toUpperCase()) + '</p>' +
+              pl.partes.map(function (pt, k) {
+                return '<div class="maas-parte"><p class="maas-parte-nome">' + esc(pt.nome) + '</p>' + (pt.texto ? '<p class="maas-texto pequeno" style="margin:0 0 2px">' + texto(pt.texto) + '</p>' : '') + sliderParte(i, k, pt.nome) + '</div>';
+              }).join('') +
+              '<div class="maas-media"><span>Nota do pilar ' + esc(pl.nome) + ' · média</span><output data-media="' + i + '">' + num(d.notas[i]) + '</output></div>'
+            : '<p class="maas-rot" style="margin-top:22px">SUA NOTA PARA ' + esc(pl.nome.toUpperCase()) + '</p>' + slider(i, true)) +
+          '<div class="maas-escala"><span>' + esc((c.escala && c.escala.min) || '0 · abandonado') + '</span><span>' + esc((c.escala && c.escala.max) || '10 · pleno') + '</span></div>' +
           nav(p, i < NP - 1 ? 'Próximo pilar →' : 'Ver minha roda →', i ? '← Pilar anterior' : '← Voltar') + '</section>';
+      } else if (t.k === 'salvo' && c.encerramento) {
+        h = topo() + '<section class="maas-tela maas-fim"><img src="logo.jpg" alt="Logo da Mentoria Estrela" class="maas-fim-logo">' +
+          '<h1 class="maas-titulo">' + esc(c.encerramento.titulo) + '</h1><div class="maas-filete" style="margin:20px auto"></div>' +
+          '<div class="maas-texto">' + texto(c.encerramento.texto || '') + '</div>' +
+          '<div class="maas-roda" style="max-width:240px;margin:24px auto 0">' + radar(d.notas, { nomes: nm, anima: true }) + '</div>' +
+          '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + idx(T, 'roda') + '">Rever a sessão</button><a class="maas-btn" href="#">Voltar para a trilha</a></div></section>';
+      } else if (t.k === 'roda' && c.roda.pergunta) {
+        h = topo(barraGeral(p)) + '<section class="maas-tela">' +
+          '<h1 class="maas-titulo menor">' + esc(c.roda.titulo) + '</h1><div class="maas-filete"></div>' +
+          '<div class="maas-roda-wrap"><div class="maas-roda" id="rodaGrande">' + radar(d.notas, { nomes: nm, anima: true, anterior: ultimaAnterior() }) + '</div>' +
+          '<div class="maas-legenda" id="legenda" aria-live="polite">Toque num ponto para ver o pilar.</div>' +
+          (ultimaAnterior() ? '<p class="maas-comp"><span class="c-ant"></span> MAAS anterior <span class="c-atu"></span> hoje</p>' : '') +
+          '<ul class="maas-lista fixa">' + nm.map(function (nome, k) { return '<li><span class="n">' + (k + 1) + '</span><span class="t">' + esc(nome) + '</span><b>' + num(d.notas[k]) + '</b></li>'; }).join('') + '</ul></div>' +
+          (c.roda.texto ? '<div class="maas-texto destaque">' + texto(c.roda.texto) + '</div>' : '') +
+          '<label class="maas-q"><span class="maas-qt">' + esc(c.roda.pergunta) + '</span></label>' +
+          '<textarea class="maas-area" rows="4" data-x="' + esc(c.roda.id || 'roda_sente') + '">' + esc(d.extra[c.roda.id || 'roda_sente'] || '') + '</textarea>' +
+          nav(p, 'Continuar →', '← Pilar ' + NP) + '</section>';
+      } else if (t.k === 'leitura' && t.j != null) {
+        var lt = c.leitura.telas[t.j];
+        h = topo(barraGeral(p)) + '<section class="maas-tela"><p class="maas-rot">' + esc(c.leitura.titulo) + ' · ' + (t.j + 1) + ' de ' + c.leitura.telas.length + '</p>';
+        if (lt.tipo === 'prioridades') {
+          if (!Array.isArray(d.prioridades)) { d.prioridades = menores3(d.notas); salvarLogo(); }
+          var bx = menores3(d.notas);
+          h += '<h1 class="maas-titulo menor">' + esc(lt.titulo) + '</h1><div class="maas-filete"></div>' +
+            (lt.texto ? '<p class="maas-texto pequeno">' + texto(lt.texto) + '</p>' : '') +
+            '<div class="maas-prior">' + nm.map(function (nome, k) {
+              var on = d.prioridades.indexOf(k) >= 0;
+              return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-prior="' + k + '"' + (on ? ' checked' : '') + '><span>' + (k + 1) + '. ' + esc(nome) + '</span><b>' + num(d.notas[k]) + '</b>' + (bx.indexOf(k) >= 0 ? '<i>menor nota</i>' : '') + '</label>';
+            }).join('') + '</div>' + (lt.frase ? '<blockquote class="maas-frase">' + esc(lt.frase) + '</blockquote>' : '');
+        } else {
+          h += '<h1 class="maas-titulo menor">' + esc(lt.pergunta) + '</h1><div class="maas-filete"></div>' +
+            (lt.exemplo ? '<p class="maas-texto pequeno">' + texto(lt.exemplo) + '</p>' : '') +
+            '<textarea class="maas-area" rows="5" data-leit="' + lt.i + '" aria-label="' + esc(lt.pergunta) + '">' + esc(d.leitura[lt.i] || '') + '</textarea>';
+        }
+        h += nav(p, 'Continuar →') + '</section>';
       } else if (t.k === 'roda' || t.k === 'salvo') {
         var depois = t.k === 'salvo';
         h = topo() + '<section class="maas-tela">' +
@@ -231,6 +327,7 @@ var MAAS = (function () {
       } else {
         h = topo(barraGeral(p)) + '<section class="maas-tela"><h1 class="maas-titulo menor">' + esc(c.compromisso.titulo) + '</h1><div class="maas-filete"></div>' +
           '<label class="maas-q"><span class="maas-qt">' + esc(c.compromisso.pergunta) + '</span></label>' +
+          (c.compromisso.exemplos ? '<ul class="maas-exemplos">' + c.compromisso.exemplos.map(function (x) { return '<li>' + texto(x) + '</li>'; }).join('') + '</ul>' : '') +
           '<textarea class="maas-area" rows="4" data-atitude>' + esc(d.atitude || '') + '</textarea>' +
           (d.prioridades && d.prioridades.length ? '<p class="maas-texto pequeno">Seus pilares prioritários: <b>' + d.prioridades.map(function (k) { return esc(nm[k]); }).join(', ') + '</b></p>' : '') +
           '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (p - 1) + '">← Voltar</button><button class="maas-btn" id="bSalvarMaas">' + esc(c.compromisso.botao) + '</button></div></section>';
@@ -250,8 +347,17 @@ var MAAS = (function () {
       $$('input[type=range]', raiz).forEach(function (r) {
         r.oninput = function () {
           var i = Number(r.getAttribute('data-i')), v = Number(r.value);
-          d.notas[i] = v; r.style.setProperty('--p', v * 10 + '%');
-          $$('output[data-i="' + i + '"]', raiz).forEach(function (o) { o.textContent = v; });
+          r.style.setProperty('--p', v * 10 + '%');
+          if (r.hasAttribute('data-parte')) {
+            var k = Number(r.getAttribute('data-parte')), np = (c.pilares[i].partes || []).length;
+            var arr = (d.parciais[i] || []).slice(); while (arr.length < np) arr.push(0);
+            arr[k] = v; d.parciais[i] = arr;
+            $$('output[data-parte-out="' + i + '-' + k + '"]', raiz).forEach(function (o) { o.textContent = v; });
+            v = media(arr);
+            $$('output[data-media="' + i + '"]', raiz).forEach(function (o) { o.textContent = num(v); });
+          }
+          d.notas[i] = v;
+          $$('output[data-i="' + i + '"]', raiz).forEach(function (o) { o.textContent = num(v); });
           var mini = $('.maas-mini', raiz);
           if (mini) mini.innerHTML = radar(d.notas, { tamanho: 120, mini: true, destaque: i });
           var g = $('#rodaGrande', raiz);
@@ -286,6 +392,26 @@ var MAAS = (function () {
           arr[Number(t.getAttribute('data-k'))] = t.value; d.extra[id] = arr; salvarLogo();
         };
       });
+      $$('[data-xp]', raiz).forEach(function (t) {
+        t.oninput = function () {
+          var id = t.getAttribute('data-xp'), arr = Array.isArray(d.extra[id]) ? d.extra[id] : [], k = Number(t.getAttribute('data-k'));
+          arr[k] = arr[k] || {}; arr[k][t.getAttribute('data-c')] = t.value; d.extra[id] = arr; salvarLogo();
+        };
+      });
+      $$('[data-grupo]', raiz).forEach(function (rb) {
+        rb.onchange = function () {
+          d.grupos[Number(rb.getAttribute('data-grupo'))] = Number(rb.value);
+          $$('[data-grupo="' + rb.getAttribute('data-grupo') + '"]', raiz).forEach(function (x) { x.closest('.maas-grupo').classList.toggle('on', x.checked); });
+          salvarLogo();
+        };
+      });
+      $$('[data-audio]', raiz).forEach(function (au) {
+        au.onended = function () {
+          d.extra[au.getAttribute('data-audio')] = true; salvarLogo(true);
+          var b = $('#bPosAudio', raiz); if (b) b.hidden = false;
+          var dc = $('#dicaAudio', raiz); if (dc) dc.hidden = true;
+        };
+      });
       $$('[data-presente]', raiz).forEach(function (b) {
         b.onclick = function () {
           d.extra[b.getAttribute('data-presente')] = true; salvarLogo();
@@ -312,7 +438,7 @@ var MAAS = (function () {
     }
     function legendaPara(i) {
       var l = $('#legenda', raiz);
-      if (l) l.innerHTML = '<b>' + (i + 1) + '. ' + esc(nm[i]) + '</b> · nota ' + d.notas[i];
+      if (l) l.innerHTML = '<b>' + (i + 1) + '. ' + esc(nm[i]) + '</b> · nota ' + num(d.notas[i]);
     }
     desenhar(false);
     return { dados: function () { return d; } };
@@ -330,7 +456,11 @@ var MAAS = (function () {
   function respExtra(f, v) {
     if (f.tipo === 'simnao') return v && v.resposta ? '<div class="resposta">' + esc(v.resposta) + (v.qual ? ' — ' + texto(v.qual) : '') + '</div>' : resp('');
     if (f.tipo === 'marcar') return Array.isArray(v) && v.length ? '<div class="resposta">' + v.map(esc).join(' · ') + '</div>' : resp('');
-    if (f.tipo === 'eusou') { var a = (Array.isArray(v) ? v : []).filter(preenchido); return a.length ? '<div class="resposta">' + a.map(function (x) { return 'Eu sou ' + esc(x); }).join('<br>') + '</div>' : resp(''); }
+    if (f.tipo === 'eusou' && f.porque) {
+      var ap = (Array.isArray(v) ? v : []).filter(function (x) { return x && (preenchido(x.eu) || preenchido(x.porque)); });
+      return ap.length ? '<div class="resposta">' + ap.map(function (x) { return '<b>Eu sou ' + esc(x.eu || '') + '</b>' + (x.porque ? ' · porque ' + esc(x.porque) : ''); }).join('<br>') + '</div>' : resp('');
+    }
+    if (f.tipo === 'eusou') { var a =(Array.isArray(v) ? v : []).filter(preenchido); return a.length ? '<div class="resposta">' + a.map(function (x) { return 'Eu sou ' + esc(x); }).join('<br>') + '</div>' : resp(''); }
     return resp(v);
   }
   function blocoExtras(lista, d) {
@@ -347,15 +477,22 @@ var MAAS = (function () {
     h += '<h4>Roda do MAAS</h4><div class="maas-adm-grade"><div class="maas-adm-roda">' + radar(d.notas, { nomes: nm, anterior: ant ? ant.notas : null }) +
       (ant ? '<p class="maas-comp"><span class="c-ant"></span> ' + new Date(ant.em).toLocaleDateString('pt-BR') + ' <span class="c-atu"></span> atual</p>' : '') + '</div>' +
       '<table class="maas-adm-notas">' + nm.map(function (n, k) {
-        var pr = (d.prioridades || []).indexOf(k) >= 0;
-        return '<tr class="' + (pr ? 'pr' : '') + '"><td>' + (k + 1) + '. ' + esc(n) + (pr ? ' <span class="pill">prioridade</span>' : '') + '</td><td><b>' + d.notas[k] + '</b>' + (ant ? ' <span class="miudo">(' + ant.notas[k] + ')</span>' : '') + '</td></tr>';
+        var pr = (d.prioridades || []).indexOf(k) >= 0, pl = c.pilares[k], sub = [];
+        if (pl.partes && d.parciais[k]) pl.partes.forEach(function (pt, j) { sub.push(esc(pt.nome) + ' ' + (((d.parciais[k] || [])[j]) || 0)); });
+        if (pl.grupos && d.grupos[k] != null && pl.grupos[d.grupos[k]]) sub.push(esc(pl.grupos[d.grupos[k]].nome));
+        return '<tr class="' + (pr ? 'pr' : '') + '"><td>' + (k + 1) + '. ' + esc(n) + (pr ? ' <span class="pill">prioridade</span>' : '') +
+          (sub.length ? '<div class="miudo">' + sub.join(' · ') + '</div>' : '') + '</td><td><b>' + num(d.notas[k]) + '</b>' + (ant ? ' <span class="miudo">(' + num(ant.notas[k]) + ')</span>' : '') + '</td></tr>';
       }).join('') + '</table></div>';
+    if (c.roda && c.roda.pergunta) h += '<p class="rotulo-peq">' + esc(c.roda.pergunta) + '</p>' + resp(d.extra[c.roda.id || 'roda_sente']);
     var refl = nm.map(function (n, k) { return preenchido(d.reflexoes[k]) ? '<p class="rotulo-peq">' + (k + 1) + '. ' + esc(n) + '</p><div class="resposta">' + texto(d.reflexoes[k]) + '</div>' : ''; }).join('');
     h += '<h4>Reflexões por pilar</h4>' + (refl || '<div class="resposta vazio">nenhuma reflexão escrita</div>');
-    h += '<h4>Leitura da roda</h4>' + c.leitura.perguntas.map(function (q, k) { return '<p class="rotulo-peq">' + esc(q) + '</p>' + resp(d.leitura[k]); }).join('');
+    var perg = c.leitura.telas
+      ? c.leitura.telas.filter(function (x) { return x.tipo !== 'prioridades'; }).map(function (x) { return { q: x.pergunta, i: x.i }; })
+      : c.leitura.perguntas.map(function (q, k) { return { q: q, i: k }; });
+    h += '<h4>Leitura da roda</h4>' + perg.map(function (x) { return '<p class="rotulo-peq">' + esc(x.q) + '</p>' + resp(d.leitura[x.i]); }).join('');
     h += '<h4>Pilares prioritários</h4>' + (d.prioridades && d.prioridades.length ? '<p>' + d.prioridades.map(function (k) { return esc(nm[k]); }).join(' · ') + '</p>' : '<div class="resposta vazio">ainda não escolheu</div>');
     h += blocoExtras(c.depois, d);
-    h += '<h4>Atitude da semana</h4>' + resp(d.atitude);
+    h += '<h4>' + esc((c.compromisso && c.compromisso.rotuloPainel) || 'Atitude da semana') + '</h4>' + resp(d.atitude);
     return h + '</div>';
   }
 

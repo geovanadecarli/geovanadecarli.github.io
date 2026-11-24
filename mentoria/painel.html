@@ -284,6 +284,10 @@
       '<p class="miudo">' + esc(a.email) + ' · ' + esc(tA ? tA.nome : 'sem turma') + ' · acesso até ' + dataBR(fim) +
       (!logins[a.email] ? ' · ⚠ ainda sem login: crie no fim da página' : logins[a.email].ultimo_acesso ? ' · último acesso ' + quando(logins[a.email].ultimo_acesso) : ' · ainda não entrou') + '</p>';
     var n = anotacoes[a.email];
+    h += '<div class="estrelas-box"><span class="miudo">★ Estrelas do Jogo Estrela (você marca)</span>' +
+      '<button class="btn peq leve" data-est="-1" aria-label="Tirar 1 estrela">−1</button><b id="estTotal">' + (a.estrelas || 0) + '</b>' +
+      '<button class="btn peq leve" data-est="1" aria-label="Somar 1 estrela">+1</button><button class="btn peq leve" data-est="2">+2</button>' +
+      '<button class="btn peq leve" data-est="5">+5</button><button class="btn peq leve" data-est="10">+10</button><span class="miudo" id="estSt"></span></div>';
     h += '<div class="anot"><label for="anotTexto">Minhas anotações · só eu vejo</label><textarea id="anotTexto" placeholder="O que eu não posso esquecer sobre ' + esc((a.nome || '').split(' ')[0] || 'esta pessoa') + '…">' + esc(n ? n.texto : '') + '</textarea>' +
       '<div class="acoes" style="display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:6px;font-size:13px;color:var(--suave)"><span id="anotSt">' + (n ? 'salvo ' + quando(n.atualizado_em) : '') + '</span><button class="btn peq roxo" id="bAnot">Salvar anotação</button></div></div>';
     if (!exercicios.length) h += '<p class="miudo">Nenhum exercício cadastrado ainda.</p>';
@@ -348,6 +352,15 @@
       };
     });
     $$('.caixa-com textarea').forEach(function (t) { t.oninput = function () { t.dataset.sujo = '1'; t.parentNode.querySelector('.estcom').textContent = 'não salvo'; }; });
+    $$('[data-est]').forEach(function (b) {
+      b.onclick = async function () {
+        var novo = Math.max(0, (a.estrelas || 0) + Number(b.getAttribute('data-est')));
+        $('#estSt').textContent = 'salvando…';
+        var r = await sb.from('alunos').update({ estrelas: novo }).eq('email', a.email);
+        if (r.error) { $('#estSt').textContent = /estrelas/.test(r.error.message) ? 'Rode o arquivo sessao-01.sql no Supabase para ativar as estrelas.' : msgErro(r.error); return; }
+        a.estrelas = novo; $('#estTotal').textContent = novo; $('#estSt').textContent = 'salvo ✓';
+      };
+    });
     $('#anotTexto').oninput = function () { this.dataset.sujo = '1'; $('#anotSt').textContent = 'não salvo'; };
     $('#bAnot').onclick = async function () {
       var t = $('#anotTexto'), r = await sb.from('anotacoes').upsert({ aluno_email: a.email, texto: t.value, atualizado_em: new Date().toISOString() });

@@ -29,6 +29,8 @@ create table if not exists alunos (
 alter table alunos add column if not exists turma_id bigint references turmas(id) on delete set null;
 -- renovação individual: se preenchido, vale esta data no lugar do fim da turma
 alter table alunos add column if not exists acesso_ate date;
+-- estrelas do Jogo Estrela que a Geovana marca à mão no painel
+alter table alunos add column if not exists estrelas int not null default 0;
 
 -- Sessões da mentoria (iguais para todas as turmas)
 create table if not exists sessoes (

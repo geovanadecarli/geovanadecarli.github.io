@@ -338,3 +338,41 @@ body.ceu{background:#F7F1E6;color:#2A1F33;font-family:Inter,Jost,system-ui,sans-
 .ag-obs{font-size:14px;color:var(--t2);margin-top:4px}
 .ag-est{font-size:13px;color:var(--o);margin-top:6px;font-weight:500}
 .maas,.maas *,.maas-adm *{font-feature-settings:"lnum" 1}
+
+/* Sessão 01 · versão da aula gravada */
+.maas-aviso{max-width:460px;margin:22px auto 0;padding:12px 14px;border:1px solid var(--o2);border-radius:4px;background:#FAF3E3;font-size:14.5px;line-height:1.5;color:var(--t)}
+.maas-paravoce{max-width:460px;margin:26px auto 0;text-align:left;border-top:1px solid var(--o2);padding-top:18px}
+.maas-regras{list-style:none;display:grid;gap:4px;margin:0 0 18px;padding:12px 14px;background:#F3EBDA;border:1px solid var(--o2);border-radius:4px;font-size:14px;line-height:1.45;color:var(--t)}
+.maas-regras li:before{content:"✧ ";color:var(--o)}
+.maas-grupos{display:grid;gap:8px;margin-top:6px}
+.maas-grupo{display:block;border:1px solid #E8DCC4;border-radius:4px;background:#fff;padding:12px 14px;cursor:pointer}
+.maas-grupo.on{border-color:var(--o);background:#FAF3E3}
+.maas-grupo .g-top{display:flex;align-items:center;gap:10px}
+.maas-grupo input{width:18px;height:18px;accent-color:var(--r);flex:none}
+.maas-grupo b{font:600 19px/1.2 'Cormorant Garamond',serif;color:var(--r)}
+.maas-grupo ul{margin:8px 0 0 28px;display:grid;gap:6px;font-size:15px;line-height:1.45}
+.maas-saiba{margin-top:16px;border:1px solid #E8DCC4;border-radius:4px;background:#fff;padding:10px 14px}
+.maas-saiba summary{cursor:pointer;font-weight:500;color:var(--r);min-height:28px}
+.maas-parte{margin-top:14px}
+.maas-parte-nome{font:600 19px/1.2 'Cormorant Garamond',serif;color:var(--r)}
+.maas-media{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:18px;padding:12px 14px;background:#FAF3E3;border:1px solid var(--o2);border-radius:4px;font-size:14px;color:var(--t2)}
+.maas-media output{font:600 44px/1 'Cormorant Garamond',serif;color:var(--o)}
+.maas-lista.fixa li{grid-template-columns:22px 1fr auto}
+.maas-lista.fixa b{font:600 22px/1 'Cormorant Garamond',serif;color:var(--r)}
+.maas-eusou.porque li{align-items:flex-start;border-bottom:1px solid #E3D6BE;padding-bottom:6px}
+.maas-eusou.porque .maas-num{padding-top:9px}
+.maas-eusou .ep{flex:1;min-width:0}
+.maas-eusou .ep-l{display:flex;align-items:center;gap:10px}
+.maas-eusou .ep-l.por span{font:400 14px Inter,Jost,sans-serif;color:var(--t2)}
+.maas-ceu{margin-top:22px;border-radius:6px;padding:34px 18px;text-align:center;color:#F3E9FF;
+  background:#2A1640 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='%23D9BF85'%3E%3Ccircle cx='12' cy='18' r='1'/%3E%3Ccircle cx='70' cy='9' r='.8'/%3E%3Ccircle cx='100' cy='48' r='1.2'/%3E%3Ccircle cx='38' cy='66' r='.7'/%3E%3Ccircle cx='86' cy='96' r='.9'/%3E%3Ccircle cx='20' cy='104' r='1.1'/%3E%3Ccircle cx='58' cy='38' r='.6'/%3E%3C/g%3E%3C/svg%3E")}
+.maas-ceu audio{width:100%;max-width:420px}
+.maas-exemplos{margin:8px 0 0 20px;display:grid;gap:4px;font-size:14.5px;color:var(--t2)}
+.maas-fim{text-align:center;padding:44px 22px 30px}
+.maas-fim-logo{width:96px;height:96px;border-radius:50%;display:block;margin:0 auto 16px;box-shadow:0 8px 20px rgba(42,22,64,.25)}
+.ag-acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.ag-link,.ag-whats{display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border-radius:3px;font-size:14px;text-decoration:none}
+.ag-link{border:1px solid var(--o2);color:var(--r)}
+.ag-whats{background:var(--r);color:#fff}
+.estrelas-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FAF3E3;border:1px solid #E8DCC4;border-radius:14px;padding:10px 14px;margin:10px 0}
+.estrelas-box b{font:600 30px/1 'Cormorant Garamond',serif;color:#8A6A24;min-width:40px;text-align:center}
