@@ -49,7 +49,7 @@
 <script>
 (function () {
   var app = $('#app');
-  var turmas = [], alunos = [], sessoes = [], exercicios = [], libs = [], respostas = {}, comentarios = {}, anotacoes = {}, logins = {};
+  var turmas = [], alunos = [], sessoes = [], sessoesTodas = [], exercicios = [], libs = [], respostas = {}, comentarios = {}, anotacoes = {}, logins = {};
   var turmaId = null, vivoTimer = null, sessaoVivo = null;
   var LINK = location.origin + location.pathname.replace(/painel\.html$/, '');
   var tmp = supabase.createClient(CONFIG.url, CONFIG.chave, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'cadastro-tmp' } });
@@ -64,6 +64,9 @@
   function libTurma(exId, tId) { return libs.some(function (l) { return l.exercicio_id === exId && !l.aluno_email && l.turma_id === tId; }); }
   function libIndividual(exId, email) { return libs.some(function (l) { return l.exercicio_id === exId && l.aluno_email === email; }); }
   function liberadoPara(exId, a) { return libIndividual(exId, a.email) || libTurma(exId, a.turma_id); }
+  function ehInd(a) { return a && a.tipo === 'individual'; }
+  function slug(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''); }
+  function sessoesDe(a) { return ehInd(a) ? sessoesTodas.filter(function (s) { return s.processo === a.processo; }) : sessoes; }
   function dataBR(d) { return d ? new Date(d + (d.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR') : ''; }
   function acessoAte(a) { var t = turmas.filter(function (x) { return x.id === a.turma_id; })[0]; return a.acesso_ate || (t && t.fim); }
   function hojeISO() { var d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
@@ -82,7 +85,8 @@
       sb.rpc('admin_logins')
     ]);
     for (var i = 0; i < rs.length; i++) if (rs[i].error) throw rs[i].error;
-    turmas = rs[0].data; alunos = rs[1].data; sessoes = rs[2].data; exercicios = rs[3].data; libs = rs[4].data;
+    turmas = rs[0].data; alunos = rs[1].data; sessoesTodas = rs[2].data;
+    sessoes = sessoesTodas.filter(function (s) { return !s.processo; }); /* turmas: só as sessões da Mentoria Estrela */ exercicios = rs[3].data; libs = rs[4].data;
     respostas = {}; rs[5].data.forEach(function (r) { respostas[chave(r.aluno_email, r.exercicio_id)] = r; });
     comentarios = {}; rs[6].data.forEach(function (c) { comentarios[chave(c.aluno_email, c.exercicio_id)] = c; });
     anotacoes = {}; rs[7].data.forEach(function (n) { anotacoes[n.aluno_email] = n; });
@@ -217,7 +221,7 @@
     h += '<form class="cartao" id="fNovo"><h3 style="margin-bottom:8px">Cadastrar participante</h3>' +
       '<div class="form-linha"><input id="nNome" placeholder="Nome" required><input id="nEmail" type="email" placeholder="E-mail" required>' +
       '<input id="nSenha" placeholder="Senha" required minlength="6" value="' + gerarSenha() + '" style="flex:0 1 170px">' +
-      '<select id="nTurma" class="sel-sessao">' + turmas.map(function (x) { return '<option value="' + x.id + '"' + (x.id === turmaId ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select>' +
+      '<select id="nTurma" class="sel-sessao">' + turmas.map(function (x) { return '<option value="' + x.id + '"' + (x.id === turmaId ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '<option value="individual">Individual (fora das turmas)</option></select>' +
       '<button class="btn">Cadastrar</button></div>' +
       '<p class="miudo" style="margin-top:8px">A senha já vem sugerida; pode trocar. Depois de cadastrar, aparece a mensagem pronta para mandar no WhatsApp.</p>' +
       '<div id="msgPronta"></div></form>';
@@ -229,22 +233,34 @@
         '<div class="barrinha"><div style="width:' + (r.lib ? Math.round(r.feitos / r.lib * 100) : 0) + '%"></div></div>' +
         '<div class="linha-info"><span>' + r.feitos + ' de ' + r.lib + ' concluídos</span><span>' + (r.ultima ? quando(r.ultima) : !logins[a.email] ? '⚠ sem login' : (a.aceite_privacidade ? 'entrou' : 'ainda não entrou')) + '</span></div></a>';
     });
+    h += '</div>';
+    var inds = alunos.filter(ehInd);
+    h += '<h2 style="margin-top:30px">Individuais <span class="pill cinza" style="font:500 13px Jost">' + inds.length + '</span></h2>' +
+      (inds.length ? '' : '<p class="miudo">Ninguém em processo individual ainda. No cadastro acima, escolha "Individual" no lugar da turma.</p>') + '<div class="grade-alunos">';
+    inds.forEach(function (a) {
+      var r = resumoAluno(a);
+      h += '<a class="cartao aluno" href="#p=' + encodeURIComponent(a.email) + '"><div class="nome">' + esc(a.nome || '(sem nome)') + ' <span class="pill ouro">Processo Individual</span></div><div class="em">' + esc(a.email) + '</div>' +
+        '<div class="barrinha"><div style="width:' + (r.lib ? Math.round(r.feitos / r.lib * 100) : 0) + '%"></div></div>' +
+        '<div class="linha-info"><span>' + r.feitos + ' de ' + r.lib + ' concluídos</span><span>' + (r.ultima ? quando(r.ultima) : !logins[a.email] ? '⚠ sem login' : (a.aceite_privacidade ? 'entrou' : 'ainda não entrou')) + '</span></div></a>';
+    });
     app.innerHTML = h + '</div>';
     $('#fNovo').onsubmit = async function (e) {
       e.preventDefault();
-      var nome = $('#nNome').value.trim(), email = $('#nEmail').value.trim().toLowerCase(), senha = $('#nSenha').value.trim(), tId = Number($('#nTurma').value);
+      var nome = $('#nNome').value.trim(), email = $('#nEmail').value.trim().toLowerCase(), senha = $('#nSenha').value.trim(), tv = $('#nTurma').value, tId = tv === 'individual' ? 'individual' : Number(tv);
       var b = $('#fNovo button'); b.disabled = true; b.textContent = 'Cadastrando…';
       var res = await cadastrar(nome, email, senha, tId);
       b.disabled = false; b.textContent = 'Cadastrar';
       if (!res.ok) { toast(res.erro); return; }
       await carregar(); telaAlunos();
-      mostrarMensagem($('#msgPronta'), nome, email, senha);
+      mostrarMensagem($('#msgPronta'), nome, email, senha, tId === 'individual');
       toast('Cadastro feito ✓');
     };
   }
   async function cadastrar(nome, email, senha, tId) {
     if (senha.length < 6) return { ok: false, erro: 'A senha precisa ter pelo menos 6 caracteres.' };
-    var linha = { nome: nome, email: email }; if (tId) linha.turma_id = tId;
+    var linha = { nome: nome, email: email };
+    if (tId === 'individual') { linha.tipo = 'individual'; linha.processo = slug(nome); linha.turma_id = null; }
+    else if (tId) linha.turma_id = tId;
     var r = await sb.from('alunos').upsert(linha, { onConflict: 'email' });
     if (r.error) return { ok: false, erro: msgErro(r.error) };
     if (logins[email]) {
@@ -261,8 +277,8 @@
     await tmp.auth.signOut().catch(function () {});
     return { ok: true };
   }
-  function mostrarMensagem(box, nome, email, senha) {
-    var msg = 'Oi ' + (nome || '').split(' ')[0] + '! ✨ Seu acesso à área da Mentoria Estrela, onde você vai responder os exercícios:\n\n' +
+  function mostrarMensagem(box, nome, email, senha, ind) {
+    var msg = 'Oi ' + (nome || '').split(' ')[0] + '! ✨ Seu acesso à ' + (ind ? 'sua área do Processo Individual' : 'área da Mentoria Estrela') + ', onde você vai responder os exercícios:\n\n' +
       LINK + '\n\nE-mail: ' + email + '\nSenha: ' + senha + '\n\nGuarde esta mensagem. As respostas são salvas automaticamente e só eu vejo.';
     box.innerHTML = '<div class="caixa-com" style="margin-top:12px"><label>Mensagem para ' + esc(nome || email) + '</label>' +
       '<textarea readonly rows="8">' + esc(msg) + '</textarea>' +
@@ -281,7 +297,7 @@
     var fim = acessoAte(a), tA = turmas.filter(function (x) { return x.id === a.turma_id; })[0];
     var h = '<p><a href="#" class="miudo">← participantes</a> · <a href="#aovivo" class="miudo">aula ao vivo</a></p>' +
       '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0">' + esc(a.nome || a.email) + '</h2><span class="vivo">atualiza sozinho</span></div>' +
-      '<p class="miudo">' + esc(a.email) + ' · ' + esc(tA ? tA.nome : 'sem turma') + ' · acesso até ' + dataBR(fim) +
+      '<p class="miudo">' + esc(a.email) + ' · ' + esc(ehInd(a) ? 'Individual' : tA ? tA.nome : 'sem turma') + ' · acesso até ' + (fim ? dataBR(fim) : 'sem data') +
       (!logins[a.email] ? ' · ⚠ ainda sem login: crie no fim da página' : logins[a.email].ultimo_acesso ? ' · último acesso ' + quando(logins[a.email].ultimo_acesso) : ' · ainda não entrou') + '</p>';
     var n = anotacoes[a.email];
     h += '<div class="estrelas-box"><span class="miudo">★ Estrelas do Jogo Estrela (você marca)</span>' +
@@ -291,17 +307,17 @@
     h += '<div class="anot"><label for="anotTexto">Minhas anotações · só eu vejo</label><textarea id="anotTexto" placeholder="O que eu não posso esquecer sobre ' + esc((a.nome || '').split(' ')[0] || 'esta pessoa') + '…">' + esc(n ? n.texto : '') + '</textarea>' +
       '<div class="acoes" style="display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:6px;font-size:13px;color:var(--suave)"><span id="anotSt">' + (n ? 'salvo ' + quando(n.atualizado_em) : '') + '</span><button class="btn peq roxo" id="bAnot">Salvar anotação</button></div></div>';
     if (!exercicios.length) h += '<p class="miudo">Nenhum exercício cadastrado ainda.</p>';
-    sessoes.forEach(function (s) {
+    sessoesDe(a).forEach(function (s) {
       var exs = exercicios.filter(function (e) { return e.sessao === s.numero; });
       if (!exs.length) return;
-      h += '<section class="sessao-bloco"><h3>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</h3>';
+      h += '<section class="sessao-bloco"><h3>Sessão ' + (s.exibir || s.numero) + (s.titulo ? ' · ' + esc(s.titulo) : '') + '</h3>';
       exs.forEach(function (e) { h += blocoEx(a, e); });
       h += '</section>';
     });
     h += '<details class="cartao" style="margin-top:30px"><summary class="miudo" style="cursor:pointer">Acesso, senha, turma e remoção</summary>' +
       '<p class="miudo" style="margin:12px 0 6px">Renovar: escolha até quando o acesso vale (o padrão da turma é ' + dataBR(tA && tA.fim) + ').</p>' +
       '<div class="form-linha"><input type="date" id="eAte" value="' + esc(fim || '') + '"><button class="btn peq ouro" id="bAte">Salvar acesso</button><button class="btn peq leve" id="bMais">+ 1 mês</button></div>' +
-      '<div class="form-linha" style="margin-top:10px"><input id="eNome" value="' + esc(a.nome) + '"><select id="eTurma" class="sel-sessao">' + turmas.map(function (x) { return '<option value="' + x.id + '"' + (x.id === a.turma_id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select><button class="btn peq" id="bNome">Salvar nome e turma</button></div>' +
+      '<div class="form-linha" style="margin-top:10px"><input id="eNome" value="' + esc(a.nome) + '"><select id="eTurma" class="sel-sessao"' + (ehInd(a) ? ' hidden' : '') + '>' + turmas.map(function (x) { return '<option value="' + x.id + '"' + (x.id === a.turma_id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select><button class="btn peq" id="bNome">Salvar nome e turma</button></div>' +
       '<div class="form-linha" style="margin-top:10px"><input id="eSenha" value="' + gerarSenha() + '"><button class="btn peq ouro" id="bSenha">' + (logins[a.email] ? 'Definir nova senha' : 'Criar login com esta senha') + '</button></div><div id="msgSenha"></div>' +
       '<p class="miudo" style="margin:14px 0 6px">Remover apaga também todas as respostas, comentários e anotações (pedido de exclusão LGPD). O login em si fica no Supabase → Authentication → Users.</p>' +
       '<button class="btn leve peq" id="bRemover" style="color:#A3283A;border-color:#E9B8BF">Remover ' + esc(a.nome || a.email) + '</button></details>';
@@ -333,13 +349,31 @@
     h += '<p style="margin-bottom:12px"><label class="miudo" style="display:inline-flex;gap:8px;align-items:center;cursor:pointer">' +
       '<input type="checkbox" class="libInd" data-ex="' + esc(e.id) + '"' + (lib ? ' checked' : '') + (turmaLib ? ' disabled' : '') + ' style="width:18px;height:18px;accent-color:var(--rosa)"> ' +
       (turmaLib ? 'liberado para a turma toda' : 'liberado só para ' + esc((a.nome || 'esta pessoa').split(' ')[0])) + '</label></p>';
-    h += '<div class="respostas-ex">' + (ehMaas(e) ? MAAS.leitura(e, r && r.dados) : htmlCampos(e.conteudo, r && r.dados, true)) + '</div>';
+    h += '<div class="respostas-ex">' + (ehMaas(e) ? MAAS.leitura(e, r && r.dados) : e.conteudo && e.conteudo.componente === 'resumo' ? '<p class="miudo">Página de resumo (só leitura). A pessoa ' + (r ? 'já abriu' : 'ainda não abriu') + '.</p>' : htmlCampos(e.conteudo, r && r.dados, true)) + '</div>';
+    var lv = ehMaas(e) && (e.conteudo.depois || []).filter(function (x) { return x.tipo === 'livro'; })[0];
+    if (lv) h += '<div class="caixa-com livro-ed"><label>Livro da sessão · você edita, a pessoa vê</label>' +
+      '<div class="form-linha"><input data-lv="titulo" placeholder="Título" value="' + esc(lv.titulo || '') + '"><input data-lv="autor" placeholder="Autor" value="' + esc(lv.autor || '') + '"></div>' +
+      '<div class="form-linha" style="margin-top:6px"><input data-lv="capa" placeholder="Link da imagem da capa (opcional)" value="' + esc(lv.capa || '') + '"></div>' +
+      '<textarea data-lv="trecho" placeholder="O que ler (capítulo, páginas, trecho)" style="margin-top:6px">' + esc(lv.trecho || '') + '</textarea>' +
+      '<div class="acoes"><span class="estlv"></span><button class="btn peq ouro bLivro" data-ex="' + esc(e.id) + '">Salvar livro</button></div></div>';
     h += '<div class="caixa-com"><label for="com_' + esc(e.id) + '">Seu comentário · a pessoa vê</label>' +
       '<textarea id="com_' + esc(e.id) + '" data-ex="' + esc(e.id) + '" placeholder="Escreva durante a sessão. Aparece embaixo do exercício para a pessoa.">' + esc(c ? c.texto : '') + '</textarea>' +
       '<div class="acoes"><span class="estcom"></span><button class="btn peq ouro bCom" data-ex="' + esc(e.id) + '">Salvar comentário</button></div></div>';
     return h + '</div></details>';
   }
   function ligarAluno(a) {
+    $$('.bLivro').forEach(function (b) {
+      b.onclick = async function () {
+        var e = exercicios.filter(function (x) { return x.id === b.getAttribute('data-ex'); })[0], box = b.closest('.livro-ed'), st = $('.estlv', box);
+        var c = JSON.parse(JSON.stringify(e.conteudo)), lv = c.depois.filter(function (x) { return x.tipo === 'livro'; })[0];
+        $$('[data-lv]', box).forEach(function (i) { lv[i.getAttribute('data-lv')] = i.value.trim(); });
+        b.disabled = true; st.textContent = 'salvando…';
+        var r = await sb.from('exercicios').update({ conteudo: c }).eq('id', e.id);
+        b.disabled = false;
+        if (r.error) { st.textContent = msgErro(r.error); return; }
+        e.conteudo = c; st.textContent = 'salvo ✓';
+      };
+    });
     $$('.bCom').forEach(function (b) {
       b.onclick = async function () {
         var id = b.getAttribute('data-ex'), ta = $('textarea[data-ex="' + CSS.escape(id) + '"]'), st = b.parentNode.querySelector('.estcom');
@@ -386,18 +420,18 @@
     $('#bAte').onclick = function () { salvarAte($('#eAte').value); };
     $('#bMais').onclick = function () { var base = acessoAte(a); if (!base || base < hojeISO()) base = hojeISO(); salvarAte(maisMeses(base, 1)); };
     $('#bNome').onclick = async function () {
-      var nome = $('#eNome').value.trim(), tId = Number($('#eTurma').value);
-      var r = await sb.from('alunos').update({ nome: nome, turma_id: tId }).eq('email', a.email);
+      var nome = $('#eNome').value.trim(), tId = ehInd(a) ? null : Number($('#eTurma').value);
+      var r = await sb.from('alunos').update(ehInd(a) ? { nome: nome } : { nome: nome, turma_id: tId }).eq('email', a.email);
       if (r.error) { toast(msgErro(r.error)); return; }
-      a.nome = nome; a.turma_id = tId; toast('Salvo ✓'); telaAluno(a.email);
+      a.nome = nome; if (!ehInd(a)) a.turma_id = tId; toast('Salvo ✓'); telaAluno(a.email);
     };
     $('#bSenha').onclick = async function () {
       var senha = $('#eSenha').value.trim(), b = this; b.disabled = true;
-      var res = await cadastrar(a.nome, a.email, senha, a.turma_id);
+      var res = await cadastrar(a.nome, a.email, senha, ehInd(a) ? null : a.turma_id);
       b.disabled = false;
       if (!res.ok) { toast(res.erro); return; }
       await carregar();
-      mostrarMensagem($('#msgSenha'), a.nome, a.email, senha);
+      mostrarMensagem($('#msgSenha'), a.nome, a.email, senha, ehInd(a));
       toast('Senha definida ✓');
     };
     $('#bRemover').onclick = async function () {

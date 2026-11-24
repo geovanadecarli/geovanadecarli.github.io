@@ -376,3 +376,28 @@ body.ceu{background:#F7F1E6;color:#2A1F33;font-family:Inter,Jost,system-ui,sans-
 .ag-whats{background:var(--r);color:#fff}
 .estrelas-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FAF3E3;border:1px solid #E8DCC4;border-radius:14px;padding:10px 14px;margin:10px 0}
 .estrelas-box b{font:600 30px/1 'Cormorant Garamond',serif;color:#8A6A24;min-width:40px;text-align:center}
+
+/* Processo individual */
+.maas-destaque{margin-top:22px;padding:14px 16px;background:#FAF3E3;border:1px solid var(--o2);border-radius:4px}
+.maas-destaque .maas-qt{font:600 21px/1.3 'Cormorant Garamond',Georgia,serif;color:#8A6A24}
+.maas-meta{border:1px solid #E8DCC4;border-radius:4px;background:#fff;padding:14px;margin-top:12px;display:grid;gap:10px}
+.maas-mlab{display:grid;gap:4px;font-size:14px;color:var(--t2)}
+.maas-mlab input{border:1px solid #E3D6BE;border-radius:4px;background:#fff;padding:11px 12px;font:400 16px Inter,Jost,sans-serif;color:var(--t)}
+.maas-mlab input:focus{outline:none;border-color:var(--o)}
+.maas-mlab .maas-area{margin-top:0}
+.maas-livro{display:grid;grid-template-columns:96px 1fr;gap:16px;align-items:start}
+.maas-livro img,.maas-livro .capa-vazia{width:96px;aspect-ratio:2/3;object-fit:cover;border-radius:4px;box-shadow:0 8px 18px rgba(42,22,64,.2)}
+.maas-livro .capa-vazia{display:grid;place-items:center;background:#2A1640;color:#D9BF85;font-size:30px}
+.maas-livro-autor{font-weight:500;color:var(--t);margin-top:6px}
+.resumo .maas-tela{margin-top:12px}
+.resumo-lista{display:grid;gap:10px;padding-left:18px;font-size:15.5px;line-height:1.55}
+.resumo-lista li::marker{color:var(--o)}
+.resumo-pilares{display:flex;flex-wrap:wrap;gap:8px}
+.resumo-pilares span{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--o);border-radius:999px;background:#FAF3E3;font-weight:500;color:var(--r)}
+.resumo-pilares i{font:600 18px/1 'Cormorant Garamond',serif;font-style:normal;color:var(--o)}
+.resumo-colunas{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.resumo-colunas>div{border:1px solid #E8DCC4;border-radius:4px;background:#fff;padding:12px 14px}
+.resumo-col-t{font:600 18px/1.2 'Cormorant Garamond',serif;color:var(--r);margin-bottom:8px}
+.resumo-colunas ol{padding-left:22px;display:grid;gap:3px;font-size:15px}
+.resumo-colunas li::marker{color:var(--o)}
+.ceu .estrela.trancada{color:#9C86B8;font-size:15px}

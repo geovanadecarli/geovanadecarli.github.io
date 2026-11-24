@@ -66,6 +66,7 @@ function preenchido(v) {
   return String(v).trim() !== '';
 }
 function progresso(conteudo, dados) {
+  if (conteudo && conteudo.componente === 'resumo') return { feitos: 1, total: 1 };
   if (conteudo && conteudo.componente === 'maas') return { feitos: dados && dados.concluido_em ? 1 : 0, total: 1 };
   var cs = camposRespondiveis(conteudo), n = 0;
   dados = dados || {};

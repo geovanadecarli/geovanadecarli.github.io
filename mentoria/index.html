@@ -24,11 +24,12 @@
 <script>
 (function () {
   var app = $('#app');
-  var eu = null, aluno = null, admin = false;
+  var eu = null, aluno = null, admin = false, individual = false;
   var sessoes = [], exercicios = [], respostas = {}, comentarios = {};
   var salvarTimer = null, pollTimer = null, exAtual = null, maasCtl = null, trilhaTimer = null;
 
   function cabeca(sub) {
+    if (individual) return '<div class="cabeca sobe"><span class="maas-estrela" style="font-size:34px;color:#B8924A;margin-bottom:6px" aria-hidden="true">✧</span><h1>Processo Individual</h1><div class="sub">' + esc(sub) + '</div></div>';
     return '<div class="cabeca sobe"><img src="logo.jpg" alt="Logo da Mentoria Estrela"><h1>Mentoria Estrela</h1><div class="sub">' + esc(sub) + '</div></div>';
   }
   function rodape() {
@@ -117,7 +118,8 @@
       sb.from('comentarios').select('exercicio_id,texto,atualizado_em').eq('aluno_email', eu.email)
     ]);
     for (var i = 0; i < rs.length; i++) if (rs[i].error) throw rs[i].error;
-    sessoes = rs[0].data; exercicios = rs[1].data;
+    var meuProc = (aluno && aluno.processo) || null;
+    sessoes = rs[0].data.filter(function (s) { return (s.processo || null) === meuProc; }); exercicios = rs[1].data;
     respostas = {}; rs[2].data.forEach(function (r) { respostas[r.exercicio_id] = r; });
     comentarios = {}; rs[3].data.forEach(function (c) { if (c.texto.trim()) comentarios[c.exercicio_id] = c; });
   }
@@ -131,6 +133,7 @@
       var r = await sb.from('alunos').select('*').eq('email', eu.email).maybeSingle();
       if (r.error) throw r.error;
       aluno = r.data;
+      individual = !!(aluno && aluno.tipo === 'individual');
       var a = await sb.rpc('eh_admin'); admin = !!a.data;
       if (!aluno && admin) { telaAdmin(); return; }
       if (!aluno) { telaSemAcesso(); return; }
@@ -147,6 +150,7 @@
 
   /* ---------- trilha ---------- */
   function estadoEx(ex) {
+    if (ex.conteudo && ex.conteudo.componente === 'resumo') return '<span class="estado">ler →</span>';
     var p = progresso(ex.conteudo, respostas[ex.id] && respostas[ex.id].dados);
     if (p.total && p.feitos >= p.total) return '<span class="estado feito">feito ✓</span>';
     if (p.feitos > 0 || respostas[ex.id]) return '<span class="estado">continuar →</span>';
@@ -167,13 +171,13 @@
     exercicios.forEach(function (e) { (porSessao[e.sessao] = porSessao[e.sessao] || []).push(e); });
     var h = '<div class="barra-topo"><span>' + esc(eu.email) + '</span><span>' +
       (admin ? '<a href="painel.html">painel</a> · ' : '') + '<button class="link" id="bSair" style="padding:0">sair</button></span></div>' +
-      cabeca('sua trilha' + (aluno.nome ? ', ' + aluno.nome.split(' ')[0] : '')) + '<div class="trilha">';
+      cabeca(individual ? (aluno.nome || '').split(' ')[0] : 'sua trilha' + (aluno.nome ? ', ' + aluno.nome.split(' ')[0] : '')) + '<div class="trilha">';
     if (!sessoes.length) h += '<p class="miudo" style="padding-left:46px">As sessões aparecem aqui assim que a Geovana liberar.</p>';
     sessoes.forEach(function (s, i) {
       var exs = porSessao[s.numero] || [];
       var tudo = exs.length && exs.every(function (e) { var p = progresso(e.conteudo, respostas[e.id] && respostas[e.id].dados); return p.total && p.feitos >= p.total; });
-      h += '<div class="passo sobe" style="animation-delay:' + (i * 60) + 'ms"><div class="estrela ' + (exs.length ? 'on' : 'off') + '" aria-hidden="true">' + (exs.length ? '★' : '☆') + '</div><div class="x">' +
-        '<b>Sessão ' + s.numero + ' · ' + esc(s.titulo) + '</b>' +
+      h += '<div class="passo sobe" style="animation-delay:' + (i * 60) + 'ms"><div class="estrela ' + (exs.length ? 'on' : 'off' + (individual ? ' trancada' : '')) + '" aria-hidden="true">' + (exs.length ? '★' : (individual ? '🔒' : '☆')) + '</div><div class="x">' +
+        '<b>Sessão ' + (s.exibir || s.numero) + (s.titulo ? ' · ' + esc(s.titulo) : '') + '</b>' +
         '<small>' + (exs.length ? (tudo ? 'tudo respondido' : exs.length + (exs.length > 1 ? ' atividades liberadas' : ' atividade liberada')) : 'em breve') + '</small>';
       if (exs.length) {
         h += '<div class="lista-ex">';
@@ -197,6 +201,7 @@
     if (!ex) { location.hash = ''; return; }
     exAtual = ex; clearInterval(trilhaTimer);
     if (ex.conteudo && ex.conteudo.componente === 'maas') { telaMaas(ex); return; }
+    if (ex.conteudo && ex.conteudo.componente === 'resumo') { telaResumo(ex); return; }
     var s = sessoes.filter(function (x) { return x.numero === ex.sessao; })[0] || { numero: ex.sessao, titulo: '' };
     var salvoServidor = respostas[id] ? respostas[id].dados : {};
     var rascunho = lerLocal('rasc_' + eu.email + '_' + id);
@@ -209,7 +214,7 @@
     var p = progresso(ex.conteudo, dados);
 
     app.innerHTML =
-      '<div class="cabeca" style="padding-bottom:8px"><h1 style="font-size:24px">Sessão ' + s.numero + (s.titulo ? ' · ' + esc(s.titulo) : '') + '</h1><div class="sub">' + esc(ex.titulo) + '</div></div>' +
+      '<div class="cabeca" style="padding-bottom:8px"><h1 style="font-size:24px">Sessão ' + (s.exibir || s.numero) + (s.titulo ? ' · ' + esc(s.titulo) : '') + '</h1><div class="sub">' + esc(ex.titulo) + '</div></div>' +
       '<div class="folha sobe"><a class="voltar" href="#">← voltar para a trilha</a>' +
       '<div class="prog" aria-hidden="true"><div style="width:' + (p.total ? Math.round(p.feitos / p.total * 100) : 0) + '%"></div></div>' +
       '<form id="fEx" onsubmit="return false">' + htmlCampos(ex.conteudo, dados, false) + '</form>' +
@@ -235,6 +240,16 @@
     prepararFotos(form, { email: eu.email, exId: id, aoMudar: aoMudar });
     if (pendente) salvar(ex, dados);
     iniciarPoll();
+  }
+
+  function telaResumo(ex) {
+    var s = sessoes.filter(function (x) { return x.numero === ex.sessao; })[0] || { numero: ex.sessao, titulo: '' };
+    app.classList.add('largo');
+    app.innerHTML = '<div class="maas-topo" style="margin-top:6px"><a href="#" class="maas-voltar" style="color:#6B5E73">← trilha</a></div>' +
+      '<div class="maas"><section class="maas-tela maas-abertura" style="padding:36px 22px"><span class="maas-estrela">✧</span><p class="maas-rot">Sessão ' + (s.exibir || s.numero) + ' · resumo</p>' +
+      '<h1 class="maas-titulo">' + esc(ex.conteudo.titulo || ex.titulo) + '</h1></section></div>' + MAAS.resumo(ex.conteudo) +
+      '<div class="maas"><div class="maas-nav"><a class="maas-btn" href="#">Voltar para a trilha</a></div></div><div id="com"></div>' + rodape();
+    mostrarComentario(); window.scrollTo(0, 0);
   }
 
   function telaMaas(ex) {

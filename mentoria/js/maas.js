@@ -46,7 +46,8 @@ var MAAS = (function () {
     if (c.leitura && c.leitura.telas) c.leitura.telas.forEach(function (x, j) { t.push({ k: 'leitura', j: j }); });
     else t.push({ k: 'leitura' });
     (c.depois || []).forEach(function (x) { t.push({ k: 'extra', x: x }); });
-    t.push({ k: 'compromisso' }, { k: 'salvo' });
+    if (c.compromisso) t.push({ k: 'compromisso' });
+    t.push({ k: 'salvo' });
     return t;
   }
   function idx(telas, k) { for (var i = 0; i < telas.length; i++) if (telas[i].k === k) return i; return 0; }
@@ -125,10 +126,14 @@ var MAAS = (function () {
       if (ctx.aoDigitar) ctx.aoDigitar();
       timer = setTimeout(function () { ctx.salvar(d); }, imediato ? 0 : 800);
     }
-    function ir(p) { d.passo = Math.max(0, Math.min(T.length - 1, p)); salvarLogo(true); desenhar(true); }
+    function ir(p) {
+      d.passo = Math.max(0, Math.min(T.length - 1, p));
+      if (T[d.passo].k === 'salvo' && !c.compromisso && !d.concluido_em) d.concluido_em = new Date().toISOString();
+      salvarLogo(true); desenhar(true);
+    }
 
     function topo(extra) {
-      return '<div class="maas-topo"><a href="#" class="maas-voltar">← trilha</a><span class="maas-rot">SESSÃO 01 · ' + esc((c.abertura.titulo || '').toUpperCase()) + '</span></div>' + (extra || '');
+      return '<div class="maas-topo"><a href="#" class="maas-voltar">← trilha</a><span class="maas-rot">' + esc(c.sessaoRotulo || 'SESSÃO 01') + ' · ' + esc((c.abertura.titulo || '').toUpperCase()) + '</span></div>' + (extra || '');
     }
     function barraGeral(p) {
       return '<div class="maas-prog" aria-hidden="true"><div style="width:' + Math.round(p / (T.length - 2) * 100) + '%"></div></div>';
@@ -149,7 +154,20 @@ var MAAS = (function () {
 
     function campoExtra(f, n) {
       var v = d.extra[f.id], h = '<div class="maas-campo"><label class="maas-q"><span class="maas-num">' + n + '</span><span class="maas-qt">' + texto(f.rotulo) + '</span></label>';
-      if (f.tipo === 'paragrafo') h += '<textarea class="maas-area" rows="4" data-x="' + esc(f.id) + '">' + esc(v || '') + '</textarea>';
+      if (f.tipo === 'paragrafo' && f.destaque) h = '<div class="maas-campo maas-destaque"><label class="maas-q"><span class="maas-qt">' + texto(f.rotulo) + '</span></label>' +
+        '<textarea class="maas-area" rows="' + (f.linhas || 7) + '" data-x="' + esc(f.id) + '">' + esc(v || '') + '</textarea>';
+      else if (f.tipo === 'paragrafo') h += '<textarea class="maas-area" rows="' + (f.linhas || 4) + '" data-x="' + esc(f.id) + '">' + esc(v || '') + '</textarea>';
+      else if (f.tipo === 'metas') {
+        var am = Array.isArray(v) ? v : [];
+        for (var km = 0; km < (f.linhas || 3); km++) {
+          var m = am[km] || {}, at = ' data-xp="' + esc(f.id) + '" data-k="' + km + '"';
+          h += '<div class="maas-meta"><p class="maas-rot">Meta ' + (km + 1) + '</p>' +
+            '<label class="maas-mlab">Meta<input type="text"' + at + ' data-c="meta" value="' + esc(m.meta || '') + '"></label>' +
+            '<label class="maas-mlab">Até quando?<input type="date"' + at + ' data-c="data" value="' + esc(m.data || '') + '"></label>' +
+            '<label class="maas-mlab">Por que isso é importante pra mim?<textarea class="maas-area" rows="2"' + at + ' data-c="porque">' + esc(m.porque || '') + '</textarea></label>' +
+            '<label class="maas-mlab">Primeiro passo, ainda esta semana<input type="text"' + at + ' data-c="passo" value="' + esc(m.passo || '') + '"></label></div>';
+        }
+      }
       else if (f.tipo === 'marcar') {
         var sel = Array.isArray(v) ? v : [];
         h += '<div class="maas-prior">' + f.opcoes.map(function (o) { var on = sel.indexOf(o) >= 0; return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-xm="' + esc(f.id) + '" value="' + esc(o) + '"' + (on ? ' checked' : '') + '><span>' + esc(o) + '</span></label>'; }).join('') + '</div>';
@@ -183,6 +201,8 @@ var MAAS = (function () {
         h += x.campos.map(function (f, i) { return campoExtra(f, x.campos.length > 1 ? i + 1 : ''); }).join('');
         if (x.dica) h += '<p class="maas-texto pequeno" style="margin-top:14px">' + texto(x.dica) + '</p>';
         h += nav(p);
+      } else if (x.tipo === 'livro') {
+        h += (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<div class="maas-filete"></div>' + cartaoLivro(x) + nav(p);
       } else if (x.tipo === 'audio') {
         var ouviu = !!d.extra[x.id];
         h += (x.rotulo ? '<p class="maas-rot">' + esc(x.rotulo) + '</p>' : '') + '<h1 class="maas-titulo menor">' + esc(x.titulo) + '</h1><div class="maas-filete"></div>' +
@@ -275,7 +295,7 @@ var MAAS = (function () {
           '<h1 class="maas-titulo menor">' + esc(c.roda.titulo) + '</h1><div class="maas-filete"></div>' +
           '<div class="maas-roda-wrap"><div class="maas-roda" id="rodaGrande">' + radar(d.notas, { nomes: nm, anima: true, anterior: ultimaAnterior() }) + '</div>' +
           '<div class="maas-legenda" id="legenda" aria-live="polite">Toque num ponto para ver o pilar.</div>' +
-          (ultimaAnterior() ? '<p class="maas-comp"><span class="c-ant"></span> MAAS anterior <span class="c-atu"></span> hoje</p>' : '') +
+          (ultimaAnterior() ? '<p class="maas-comp"><span class="c-ant"></span> ' + esc((c.anterior && c.anterior.rotulo) || 'MAAS anterior') + ' <span class="c-atu"></span> hoje</p>' : '') +
           '<ul class="maas-lista fixa">' + nm.map(function (nome, k) { return '<li><span class="n">' + (k + 1) + '</span><span class="t">' + esc(nome) + '</span><b>' + num(d.notas[k]) + '</b></li>'; }).join('') + '</ul></div>' +
           (c.roda.texto ? '<div class="maas-texto destaque">' + texto(c.roda.texto) + '</div>' : '') +
           '<label class="maas-q"><span class="maas-qt">' + esc(c.roda.pergunta) + '</span></label>' +
@@ -339,7 +359,7 @@ var MAAS = (function () {
 
     function ultimaAnterior() {
       var hs = d.historico || [];
-      return hs.length ? hs[hs.length - 1].notas : null;
+      return hs.length ? hs[hs.length - 1].notas : (c.anterior ? c.anterior.notas : null);
     }
 
     function ligar() {
@@ -444,6 +464,36 @@ var MAAS = (function () {
     return { dados: function () { return d; } };
   }
 
+  function cartaoLivro(x) {
+    return '<div class="maas-livro">' +
+      (x.capa ? '<img src="' + esc(x.capa) + '" alt="Capa de ' + esc(x.titulo || '') + '">' : '<div class="capa-vazia" aria-hidden="true">✧</div>') +
+      '<div><h1 class="maas-titulo menor" style="margin-top:0">' + esc(x.titulo || 'Livro a definir') + '</h1>' +
+      (x.autor ? '<p class="maas-livro-autor">' + esc(x.autor) + '</p>' : '') +
+      (x.trecho ? '<p class="maas-rot" style="margin-top:14px">O que ler</p><div class="maas-texto">' + texto(x.trecho) + '</div>'
+                : (x.texto ? '<p class="maas-texto pequeno" style="margin-top:12px">' + texto(x.texto) + '</p>' : '')) + '</div></div>';
+  }
+
+  /* ---------- página de resumo (só leitura) ---------- */
+  function resumo(c) {
+    var h = '<div class="maas resumo">';
+    (c.blocos || []).forEach(function (b) {
+      h += '<section class="maas-tela">' + (b.titulo ? '<p class="maas-rot">' + esc(b.titulo) + '</p><div class="maas-filete" style="margin:10px 0 16px"></div>' : '');
+      if (b.tipo === 'texto') h += '<div class="maas-texto">' + texto(b.texto) + '</div>';
+      else if (b.tipo === 'lista') h += '<ul class="resumo-lista">' + b.itens.map(function (t) { return '<li>' + texto(t) + '</li>'; }).join('') + '</ul>';
+      else if (b.tipo === 'roda') {
+        h += '<div class="maas-roda-wrap"><div class="maas-roda">' + radar(b.notas, { nomes: b.nomes }) + '</div>' +
+          '<ul class="maas-lista fixa">' + b.nomes.map(function (n, k) { return '<li><span class="n">' + (k + 1) + '</span><span class="t">' + esc(n) + '</span><b>' + num(b.notas[k]) + '</b></li>'; }).join('') + '</ul></div>' +
+          (b.data ? '<p class="maas-texto pequeno" style="text-align:center">MAAS feito em ' + esc(b.data) + '</p>' : '');
+      } else if (b.tipo === 'destaques') h += '<div class="resumo-pilares">' + b.itens.map(function (t, k) { return '<span><i>' + (k + 1) + '</i>' + esc(t) + '</span>'; }).join('') + '</div>';
+      else if (b.tipo === 'colunas') h += '<div class="resumo-colunas">' + b.colunas.map(function (col) {
+        return '<div><p class="resumo-col-t">' + esc(col.titulo) + '</p><ol>' + col.itens.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ol></div>';
+      }).join('') + '</div>';
+      else if (b.tipo === 'frase') h += '<p class="maas-frase" style="margin:0;padding:0;border:0">' + texto(b.texto) + '</p>';
+      h += '</section>';
+    });
+    return h + '</div>';
+  }
+
   function videoEmbed(url) {
     var m = /(?:youtu\.be\/|v=|shorts\/)([\w-]{11})/.exec(url), src = url;
     if (m) src = 'https://www.youtube-nocookie.com/embed/' + m[1];
@@ -456,6 +506,13 @@ var MAAS = (function () {
   function respExtra(f, v) {
     if (f.tipo === 'simnao') return v && v.resposta ? '<div class="resposta">' + esc(v.resposta) + (v.qual ? ' — ' + texto(v.qual) : '') + '</div>' : resp('');
     if (f.tipo === 'marcar') return Array.isArray(v) && v.length ? '<div class="resposta">' + v.map(esc).join(' · ') + '</div>' : resp('');
+    if (f.tipo === 'metas') {
+      var am = (Array.isArray(v) ? v : []).filter(function (m) { return m && (preenchido(m.meta) || preenchido(m.passo)); });
+      return am.length ? am.map(function (m, k) {
+        return '<div class="resposta"><b>Meta ' + (k + 1) + ': ' + esc(m.meta || '') + '</b>' + (m.data ? ' · até ' + esc(new Date(m.data + 'T12:00:00').toLocaleDateString('pt-BR')) : '') +
+          (m.porque ? '<br>Por quê: ' + esc(m.porque) : '') + (m.passo ? '<br>Primeiro passo: ' + esc(m.passo) : '') + '</div>';
+      }).join('') : resp('');
+    }
     if (f.tipo === 'eusou' && f.porque) {
       var ap = (Array.isArray(v) ? v : []).filter(function (x) { return x && (preenchido(x.eu) || preenchido(x.porque)); });
       return ap.length ? '<div class="resposta">' + ap.map(function (x) { return '<b>Eu sou ' + esc(x.eu || '') + '</b>' + (x.porque ? ' · porque ' + esc(x.porque) : ''); }).join('<br>') + '</div>' : resp('');
@@ -471,11 +528,11 @@ var MAAS = (function () {
   function leitura(ex, dados) {
     var c = ex.conteudo, nm = nomes(c);
     if (!dados) return '<div class="resposta vazio">Ainda não começou a sessão.</div>';
-    var d = completar(c, JSON.parse(JSON.stringify(dados))), ant = (d.historico || []).length ? d.historico[d.historico.length - 1] : null;
+    var d = completar(c, JSON.parse(JSON.stringify(dados))), ant = (d.historico || []).length ? d.historico[d.historico.length - 1] : (c.anterior ? { em: c.anterior.em, notas: c.anterior.notas, rotulo: c.anterior.rotulo } : null);
     var h = '<div class="maas-adm"><p class="miudo" style="margin-bottom:8px">Status: <b>' + status(dados) + '</b> · ' + esc(onde(c, d).texto) + '</p>';
     h += blocoExtras(c.antes, d);
     h += '<h4>Roda do MAAS</h4><div class="maas-adm-grade"><div class="maas-adm-roda">' + radar(d.notas, { nomes: nm, anterior: ant ? ant.notas : null }) +
-      (ant ? '<p class="maas-comp"><span class="c-ant"></span> ' + new Date(ant.em).toLocaleDateString('pt-BR') + ' <span class="c-atu"></span> atual</p>' : '') + '</div>' +
+      (ant ? '<p class="maas-comp"><span class="c-ant"></span> ' + esc(ant.rotulo || new Date(ant.em).toLocaleDateString('pt-BR')) + ' <span class="c-atu"></span> atual</p>' : '') + '</div>' +
       '<table class="maas-adm-notas">' + nm.map(function (n, k) {
         var pr = (d.prioridades || []).indexOf(k) >= 0, pl = c.pilares[k], sub = [];
         if (pl.partes && d.parciais[k]) pl.partes.forEach(function (pt, j) { sub.push(esc(pt.nome) + ' ' + (((d.parciais[k] || [])[j]) || 0)); });
@@ -489,12 +546,12 @@ var MAAS = (function () {
     var perg = c.leitura.telas
       ? c.leitura.telas.filter(function (x) { return x.tipo !== 'prioridades'; }).map(function (x) { return { q: x.pergunta, i: x.i }; })
       : c.leitura.perguntas.map(function (q, k) { return { q: q, i: k }; });
-    h += '<h4>Leitura da roda</h4>' + perg.map(function (x) { return '<p class="rotulo-peq">' + esc(x.q) + '</p>' + resp(d.leitura[x.i]); }).join('');
-    h += '<h4>Pilares prioritários</h4>' + (d.prioridades && d.prioridades.length ? '<p>' + d.prioridades.map(function (k) { return esc(nm[k]); }).join(' · ') + '</p>' : '<div class="resposta vazio">ainda não escolheu</div>');
+    if (perg.length) h += '<h4>Leitura da roda</h4>' + perg.map(function (x) { return '<p class="rotulo-peq">' + esc(x.q) + '</p>' + resp(d.leitura[x.i]); }).join('');
+    if (!c.leitura.telas || c.leitura.telas.some(function (x) { return x.tipo === 'prioridades'; })) h += '<h4>Pilares prioritários</h4>' + (d.prioridades && d.prioridades.length ? '<p>' + d.prioridades.map(function (k) { return esc(nm[k]); }).join(' · ') + '</p>' : '<div class="resposta vazio">ainda não escolheu</div>');
     h += blocoExtras(c.depois, d);
-    h += '<h4>' + esc((c.compromisso && c.compromisso.rotuloPainel) || 'Atitude da semana') + '</h4>' + resp(d.atitude);
+    if (c.compromisso) h += '<h4>' + esc(c.compromisso.rotuloPainel || 'Atitude da semana') + '</h4>' + resp(d.atitude);
     return h + '</div>';
   }
 
-  return { radar: radar, montar: montar, leitura: leitura, status: status, completar: completar, onde: onde };
+  return { radar: radar, montar: montar, leitura: leitura, status: status, completar: completar, onde: onde, resumo: resumo };
 })();
