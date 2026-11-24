@@ -9,7 +9,7 @@
 <link rel="icon" href="logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:wght@500;600&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500&family=Jost:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="estilo.css">
 <style>
 .seletor-turma{background:transparent;border:1px solid #6E5590;color:var(--lilas-claro);border-radius:20px;padding:6px 10px;font-size:14px}
@@ -27,6 +27,24 @@
 .anot textarea{width:100%;min-height:120px;border:1px solid #D8C9E8;border-radius:10px;padding:10px;font-size:15px;background:#FCFAFF}
 .anot{background:#F1EAF8;border-radius:14px;padding:12px 14px;margin:14px 0}
 .anot label{font:500 22px/1 Caveat,cursive;color:var(--roxo);display:block;margin-bottom:6px}
+/* espelho: a tela do participante, em formato de celular, ao lado */
+#espelho{position:fixed;top:0;right:0;bottom:0;width:min(430px,100vw);z-index:60;display:flex;flex-direction:column;background:#2A1640;box-shadow:-12px 0 32px rgba(42,22,64,.35)}
+#espelho[hidden]{display:none}
+.esp-barra{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#1E0F30;color:#F3E9FF}
+.esp-tit{flex:1;min-width:0;display:grid;font-size:13px;line-height:1.3}
+.esp-tit b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.esp-tit span{color:#D9BF85}
+.esp-seguir{display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;cursor:pointer}
+.esp-seguir input{accent-color:#B8924A;width:16px;height:16px}
+.esp-x{background:none;border:0;color:#F3E9FF;font-size:26px;line-height:1;width:36px;height:36px;cursor:pointer}
+.esp-tela{flex:1;overflow:auto;padding:14px 14px 40px;background:#F7F1E6;color:var(--tinta)}
+.esp-tela .cabeca{text-align:center}
+.esp-tela .cabeca h1{font:600 24px/1.1 'Cormorant Garamond',Georgia,serif;color:#4B2A6B}
+.esp-tela .cabeca .sub{color:#8A6A24}
+.esp-tela input:disabled,.esp-tela textarea:disabled,.esp-tela select:disabled{opacity:1;color:var(--tinta);-webkit-text-fill-color:var(--tinta);background:#fff}
+.esp-tela .maas-voltar{pointer-events:none;opacity:.5}
+.esp-mini{display:inline-block;margin-top:8px;font-size:12.5px;color:var(--roxo);border:1px solid var(--linha);border-radius:20px;padding:4px 10px;background:#fff}
+@media (min-width:900px){body.com-espelho main,body.com-espelho .topo-painel,body.com-espelho .abas{margin-right:440px}}
 </style>
 </head>
 <body class="atelie">
@@ -138,6 +156,94 @@
     return (p.total && p.feitos >= p.total) ? '<span class="pill verde">respondido</span>' : p.feitos ? '<span class="pill">' + p.feitos + ' de ' + p.total + '</span>' : '<span class="pill ouro">liberado</span>';
   }
 
+  /* ---------- ESPELHO: a tela exata que a pessoa vê, com as respostas dela ----------
+     Usa o mesmo código da área do participante (htmlCampos / MAAS.montar / MAAS.resumo),
+     então qualquer sessão nova aparece aqui sozinha. Nada é salvo a partir do espelho. */
+  var esp = null, espTimer = null;
+  function espelhoDom() {
+    if ($('#espelho')) return;
+    var d = document.createElement('aside'); d.id = 'espelho'; d.hidden = true; d.setAttribute('aria-label', 'Tela do participante');
+    d.innerHTML = '<div class="esp-barra"><div class="esp-tit"><b id="espNome"></b><span id="espOnde"></span></div>' +
+      '<label class="esp-seguir"><input type="checkbox" id="espSeguir" checked> seguir ao vivo</label>' +
+      '<button class="esp-x" id="espFechar" aria-label="Fechar a tela do participante">×</button></div>' +
+      '<div class="esp-tela ceu" id="espTela"><div id="espMain"></div></div>';
+    document.body.appendChild(d);
+    $('#espFechar').onclick = fecharEspelho;
+    $('#espSeguir').onchange = function () { if (esp) { esp.seguir = this.checked; if (esp.seguir) esp.passo = null; desenharEspelho(); } };
+    $('#espMain').addEventListener('click', function (ev) {
+      var l = ev.target.closest('a[href]');
+      if (l && l.getAttribute('href').charAt(0) === '#') ev.preventDefault(); /* não muda a página do painel */
+    });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && esp) fecharEspelho(); });
+  }
+  function abrirEspelho(email, exId) {
+    var a = alunos.filter(function (x) { return x.email === email; })[0], e = exercicios.filter(function (x) { return x.id === exId; })[0];
+    if (!a || !e) return;
+    espelhoDom();
+    esp = { a: a, e: e, seguir: true, passo: null, versao: null };
+    $('#espSeguir').checked = true;
+    $('#espelho').hidden = false; document.body.classList.add('com-espelho');
+    desenharEspelho();
+    clearInterval(espTimer);
+    espTimer = setInterval(async function () {
+      if (!esp || document.hidden) return;
+      await recarregarRespostas();
+      var r = respostas[chave(esp.a.email, esp.e.id)], v = r ? r.atualizado_em : null;
+      if (v !== esp.versao) desenharEspelho(true);
+    }, 4000);
+  }
+  function fecharEspelho() {
+    clearInterval(espTimer); esp = null;
+    var d = $('#espelho'); if (d) d.hidden = true; document.body.classList.remove('com-espelho');
+  }
+  function desenharEspelho(atualizacao) {
+    if (!esp) return;
+    var a = esp.a, e = esp.e, r = respostas[chave(a.email, e.id)], c = comentarios[chave(a.email, e.id)];
+    var tela = $('#espTela'), main = $('#espMain'), rolagem = tela.scrollTop;
+    esp.versao = r ? r.atualizado_em : null;
+    var s = sessoesTodas.filter(function (x) { return x.numero === e.sessao; })[0] || { numero: e.sessao, titulo: '' };
+    $('#espNome').textContent = (a.nome || a.email) + ' · ' + e.titulo;
+    var dados = r ? JSON.parse(JSON.stringify(r.dados)) : null;
+    if (ehMaas(e)) {
+      var dd = MAAS.completar(e.conteudo, dados || {});
+      var onde = MAAS.onde(e.conteudo, r ? dd : null);
+      $('#espOnde').textContent = r ? 'está ' + onde.texto + ' · ' + quando(r.atualizado_em) : 'ainda não abriu';
+      if (!esp.seguir && esp.passo != null) dd.passo = esp.passo;
+      var passoDele = r ? (r.dados.passo || 0) : 0;
+      main.innerHTML = '<div id="espMaas"></div>';
+      MAAS.montar($('#espMaas'), e, dd, {
+        aoDigitar: function () {},
+        aoTrocarTela: function () { $('#espTela').scrollTop = 0; },
+        salvar: function (x) {
+          if (x.passo !== (esp.passo == null ? passoDele : esp.passo)) {
+            esp.passo = x.passo; esp.seguir = false; $('#espSeguir').checked = false; /* você virou a página */
+          }
+        }
+      });
+    } else if (e.conteudo && e.conteudo.componente === 'resumo') {
+      $('#espOnde').textContent = 'página de leitura' + (r ? ' · já abriu' : '');
+      main.innerHTML = MAAS.resumo(e.conteudo);
+    } else {
+      var p = progresso(e.conteudo, dados || {});
+      $('#espOnde').textContent = r ? p.feitos + ' de ' + p.total + ' respondidas · ' + quando(r.atualizado_em) : 'ainda não abriu';
+      main.innerHTML = '<div class="cabeca" style="padding-bottom:8px"><h1 style="font-size:22px">Sessão ' + (s.exibir || s.numero) + (s.titulo ? ' · ' + esc(s.titulo) : '') + '</h1><div class="sub">' + esc(e.titulo) + '</div></div>' +
+        '<div class="folha"><div class="prog" aria-hidden="true"><div style="width:' + (p.total ? Math.round(p.feitos / p.total * 100) : 0) + '%"></div></div>' +
+        '<form onsubmit="return false">' + htmlCampos(e.conteudo, dados || {}, false) + '</form></div>';
+      prepararFotos(main, { leitura: true });
+    }
+    if (c && c.texto.trim()) main.insertAdjacentHTML('beforeend', '<div class="comentario"><b>Geovana comentou</b>' + texto(c.texto) + '</div>');
+    /* só olhar: nada pode ser digitado aqui */
+    $$('input, textarea, select', main).forEach(function (x) { x.disabled = true; });
+    $$('.enviar-foto, .apagar-foto', main).forEach(function (x) { x.hidden = true; });
+    if (atualizacao) tela.scrollTop = rolagem; else tela.scrollTop = 0;
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-espelho]');
+    if (!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    abrirEspelho(b.getAttribute('data-espelho'), b.getAttribute('data-espex'));
+  }, true);
+
   /* ---------- AULA AO VIVO ---------- */
   function telaVivo() {
     var t = turma();
@@ -178,7 +284,8 @@
           corpo = '<div class="res">' + camposResumo(e, r.dados) + '</div>';
         }
         h += '<a class="vivo-card" href="#p=' + encodeURIComponent(a.email) + '"><div class="nome">' + esc(a.nome || a.email) + '</div>' +
-          '<div class="st">' + statusEx(a, e) + (r ? ' · ' + quando(r.atualizado_em) : '') + '</div>' + corpo + '</a>';
+          '<div class="st">' + statusEx(a, e) + (r ? ' · ' + quando(r.atualizado_em) : '') + '</div>' + corpo +
+          '<span class="esp-mini" role="button" tabindex="0" data-espelho="' + esc(a.email) + '" data-espex="' + esc(e.id) + '">📱 ver a tela</span></a>';
       });
       h += '</div>';
     });
@@ -348,7 +455,8 @@
       (r ? '<span class="miudo">' + quando(r.atualizado_em) + '</span>' : '') + (c && c.texto.trim() ? '<span title="Você comentou">💬</span>' : '') + '</summary><div class="ex-corpo">';
     h += '<p style="margin-bottom:12px"><label class="miudo" style="display:inline-flex;gap:8px;align-items:center;cursor:pointer">' +
       '<input type="checkbox" class="libInd" data-ex="' + esc(e.id) + '"' + (lib ? ' checked' : '') + (turmaLib ? ' disabled' : '') + ' style="width:18px;height:18px;accent-color:var(--rosa)"> ' +
-      (turmaLib ? 'liberado para a turma toda' : 'liberado só para ' + esc((a.nome || 'esta pessoa').split(' ')[0])) + '</label></p>';
+      (turmaLib ? 'liberado para a turma toda' : 'liberado só para ' + esc((a.nome || 'esta pessoa').split(' ')[0])) + '</label></p>' +
+      '<p style="margin:-4px 0 12px"><button type="button" class="btn peq roxo" data-espelho="' + esc(a.email) + '" data-espex="' + esc(e.id) + '">📱 Ver a tela de ' + esc((a.nome || 'participante').split(' ')[0]) + '</button></p>';
     h += '<div class="respostas-ex">' + (ehMaas(e) ? MAAS.leitura(e, r && r.dados) : e.conteudo && e.conteudo.componente === 'resumo' ? '<p class="miudo">Página de resumo (só leitura). A pessoa ' + (r ? 'já abriu' : 'ainda não abriu') + '.</p>' : htmlCampos(e.conteudo, r && r.dados, true)) + '</div>';
     var lv = ehMaas(e) && (e.conteudo.depois || []).filter(function (x) { return x.tipo === 'livro'; })[0];
     if (lv) h += '<div class="caixa-com livro-ed"><label>Livro da sessão · você edita, a pessoa vê</label>' +

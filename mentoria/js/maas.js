@@ -353,7 +353,7 @@ var MAAS = (function () {
           '<div class="maas-nav"><button class="maas-btn leve" data-ir="' + (p - 1) + '">← Voltar</button><button class="maas-btn" id="bSalvarMaas">' + esc(c.compromisso.botao) + '</button></div></section>';
       }
       raiz.innerHTML = '<div class="maas">' + h + '<div class="maas-status" id="salvo" role="status"></div></div>';
-      if (rolar) window.scrollTo(0, 0);
+      if (rolar) { if (ctx.aoTrocarTela) ctx.aoTrocarTela(); else window.scrollTo(0, 0); }
       ligar();
     }
 
